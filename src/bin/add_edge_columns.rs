@@ -4,13 +4,10 @@ extern crate log;
 use async_once::AsyncOnce;
 use humantime::format_duration;
 use in_place::InPlace;
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{info, warn};
 use polars::prelude::*;
 use rayon::prelude::*;
-use reqwest::redirect::Policy;
-use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::ser::CharEscape::AsciiControl;
@@ -26,7 +23,6 @@ use std::io::BufWriter;
 use std::path;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::Duration;
 use std::time::Instant;
 
 #[tokio::main]

@@ -1,31 +1,14 @@
-use async_once::AsyncOnce;
 use clap::Parser;
 use humantime::format_duration;
-use in_place::InPlace;
 use itertools::Itertools;
-use lazy_static::lazy_static;
-use log::{debug, info, warn};
-use polars::prelude::*;
+use log::{debug, info};
 use rayon::prelude::*;
-use reqwest::redirect::Policy;
-use reqwest::{header, Client};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use serde_json::ser::CharEscape::AsciiControl;
-use serde_with::skip_serializing_none;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use rusty_matrix_io::Edge;
 use std::error;
-use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
 use std::fs;
-use std::fs::File;
 use std::io;
-use std::io::prelude::*;
 use std::io::BufWriter;
 use std::path;
-use std::path::PathBuf;
-use std::sync::Mutex;
-use std::time::Duration;
 use std::time::Instant;
 
 #[derive(Parser, PartialEq, Debug)]
@@ -44,13 +27,14 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     debug!("{:?}", options);
 
     let edges_path = options.edges_file;
+    let data = read_edges_file(&edges_path);
 
     let curie_regex = regex::Regex::new(r"^[A-Za-z_]+:.+$").expect("Could not create curie regex");
     let starts_with_biolink_regex = regex::Regex::new("^biolink:.+$").expect("Could not create biolink regex");
 
     let subject_column_validation_infractions: Vec<_> = data
         .par_iter()
-        .filter_map(|n| match curie_regex.is_match(n.id.as_str()) {
+        .filter_map(|n| match curie_regex.is_match(n.subject.as_str()) {
             true => None,
             false => Some(format!("subject column does not have a valid CURIE: {:?}", n)),
         })
@@ -60,7 +44,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     let predicate_column_validation_infractions: Vec<_> = data
         .par_iter()
-        .filter_map(|n| match starts_with_biolink_regex.is_match(n.id.as_str()) {
+        .filter_map(|n| match starts_with_biolink_regex.is_match(n.predicate.as_str()) {
             true => None,
             false => Some(format!("predicate column does not start with 'biolink': {:?}", n)),
         })
@@ -70,7 +54,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     let object_column_validation_infractions: Vec<_> = data
         .par_iter()
-        .filter_map(|n| match curie_regex.is_match(n.id.as_str()) {
+        .filter_map(|n| match curie_regex.is_match(n.object.as_str()) {
             true => None,
             false => Some(format!("object column does not have a valid CURIE: {:?}", n)),
         })
@@ -80,4 +64,17 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
     Ok(())
+}
+
+fn read_edges_file(nodes_path: &path::PathBuf) -> Vec<Edge> {
+    let nodes_file = fs::File::open(nodes_path.clone()).unwrap();
+    let reader = io::BufReader::new(nodes_file);
+    let mut rdr = csv::ReaderBuilder::new().has_headers(true).delimiter(b'\t').from_reader(reader);
+
+    let mut edges = vec![];
+    for result in rdr.deserialize() {
+        let record: Edge = result.unwrap();
+        edges.push(record.clone());
+    }
+    edges
 }
