@@ -6,9 +6,8 @@ use humantime::format_duration;
 use in_place::InPlace;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use log::{info, warn};
+use log::info;
 use polars::prelude::*;
-use rayon::prelude::*;
 use reqwest::redirect::Policy;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
@@ -98,24 +97,13 @@ fn merge_files(output_path: &PathBuf, edge_file_names: Vec<PathBuf>) {
             .expect("Could not join");
 
         let columns = vec!["source", "sources", "unbiased", "evidence", "vestige", "version", "p_value", "direction", "alternative_allele", "reference_allele"];
-        main_df = coalesce_columns(main_df, columns);
+        main_df = rusty_matrix_io::coalesce_columns(main_df, columns);
 
         println!("column names: {:?}", main_df.get_column_names());
     }
 
     let mut file = fs::File::create(output_path.as_path()).unwrap();
     CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut main_df).unwrap();
-}
-
-fn coalesce_columns(mut df: DataFrame, cols: Vec<&str>) -> DataFrame {
-    for col in cols.into_iter() {
-        let col_right = format!("{}_right", col);
-        if df.get_column_names_str().contains(&col_right.as_str()) {
-            df = df.clone().lazy().with_column(coalesce(&[col.into(), col_right.as_str().into()]).alias(col)).collect().unwrap();
-            df.drop_in_place(col_right.as_str()).expect("Unable to remove column");
-        }
-    }
-    df
 }
 
 #[cfg(test)]

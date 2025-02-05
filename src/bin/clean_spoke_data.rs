@@ -1,32 +1,22 @@
-#[macro_use]
-extern crate log;
-
 use async_once::AsyncOnce;
 use humantime::format_duration;
 use in_place::InPlace;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use log::{info, warn};
-use polars::prelude::*;
+use log::{debug, info};
 use rayon::prelude::*;
+use reqwest::header;
 use reqwest::redirect::Policy;
-use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use serde_json::ser::CharEscape::AsciiControl;
-use serde_with::skip_serializing_none;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::error;
-use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
 use std::fs;
-use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::io::BufWriter;
 use std::path;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -281,7 +271,7 @@ fn read_nodes_file(nodes_file_path: &path::PathBuf) -> Vec<Node> {
 fn read_edges_file(edges_file_path: &path::PathBuf) -> Vec<Edge> {
     let edges_file = fs::File::open(edges_file_path).unwrap();
     let reader = io::BufReader::new(edges_file);
-    let mut edges: Vec<Edge> = reader
+    let edges: Vec<Edge> = reader
         .lines()
         .skip(1)
         .filter_map(|line| {

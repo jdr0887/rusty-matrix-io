@@ -4,11 +4,9 @@ extern crate log;
 use async_once::AsyncOnce;
 use humantime::format_duration;
 use in_place::InPlace;
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{info, warn};
 use polars::prelude::*;
-use rayon::prelude::*;
 use reqwest::redirect::Policy;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
@@ -23,7 +21,6 @@ use std::io::prelude::*;
 use std::io::BufWriter;
 use std::path;
 use std::path::PathBuf;
-use std::time::Duration;
 use std::time::Instant;
 
 #[tokio::main]
@@ -32,13 +29,13 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     env_logger::init();
 
     let base_path = path::PathBuf::from("/home/jdr0887/data/matrix/KGs/spoke/V5");
-    let nodes_path = base_path.join("nodes");
+    // let nodes_path = base_path.join("nodes");
 
-    let first_output_path = base_path.join("first_merged_nodes.tsv");
-    let second_output_path = base_path.join("second_merged_nodes.tsv");
-    let third_output_path = base_path.join("third_merged_nodes.tsv");
-    let fourth_output_path = base_path.join("fourth_merged_nodes.tsv");
-    let fifth_output_path = base_path.join("fifth_merged_nodes.tsv");
+    // let first_output_path = base_path.join("first_merged_nodes.tsv");
+    // let second_output_path = base_path.join("second_merged_nodes.tsv");
+    // let third_output_path = base_path.join("third_merged_nodes.tsv");
+    // let fourth_output_path = base_path.join("fourth_merged_nodes.tsv");
+    // let fifth_output_path = base_path.join("fifth_merged_nodes.tsv");
 
     // let first_node_file_names = vec![
     //     "node_0_new.tsv",
@@ -212,7 +209,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     //
 
     let final_output = base_path.join("merged_nodes.tsv");
-    let mut final_df = LazyCsvReader::new(final_output.clone())
+    let final_df = LazyCsvReader::new(final_output.clone())
         .with_separator(b'\t')
         .with_truncate_ragged_lines(true)
         .with_has_header(true)
@@ -270,24 +267,13 @@ fn merge_files(output_path: &PathBuf, node_file_names: Vec<PathBuf>) {
             "polyprotein",
             "isoform",
         ];
-        main_df = coalesce_columns(main_df, columns);
+        main_df = rusty_matrix_io::coalesce_columns(main_df, columns);
 
         println!("column names: {:?}", main_df.get_column_names());
     }
 
     let mut file = fs::File::create(output_path.as_path()).unwrap();
     CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut main_df).unwrap();
-}
-
-fn coalesce_columns(mut df: DataFrame, cols: Vec<&str>) -> DataFrame {
-    for col in cols.into_iter() {
-        let col_right = format!("{}_right", col);
-        if df.get_column_names_str().contains(&col_right.as_str()) {
-            df = df.clone().lazy().with_column(coalesce(&[col.into(), col_right.as_str().into()]).alias(col)).collect().unwrap();
-            df.drop_in_place(col_right.as_str()).expect("Unable to remove column");
-        }
-    }
-    df
 }
 
 #[cfg(test)]

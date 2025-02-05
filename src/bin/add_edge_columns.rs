@@ -3,7 +3,7 @@ extern crate log;
 
 use clap::Parser;
 use humantime::format_duration;
-use log::{info, warn};
+use itertools::Itertools;
 use polars::prelude::*;
 use std::error;
 use std::fs;
@@ -55,15 +55,18 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         "subject_direction_qualifier",
         "object_aspect_qualifier",
         "object_direction_qualifier",
-    ];
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect_vec();
 
     let column_names = df.get_column_names_str();
 
     let new_columns: Vec<_> = expected_columns
-        .iter()
-        .filter_map(|c| match column_names.contains(c) {
+        .into_iter()
+        .filter_map(|c| match column_names.contains(&c.as_str()) {
             true => None,
-            false => Some(Series::full_null(PlSmallStr::from(c.clone()), capacity, &DataType::String).lit()),
+            false => Some(Series::full_null(PlSmallStr::from(c), capacity, &DataType::String).lit()),
         })
         .collect();
     df = df.clone().lazy().with_columns(new_columns).collect().unwrap();
