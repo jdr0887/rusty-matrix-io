@@ -1,10 +1,7 @@
 extern crate env_logger;
 extern crate log;
 
-use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
-use std::io::BufRead;
-use std::{fs, io, path};
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Node {

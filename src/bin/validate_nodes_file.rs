@@ -50,16 +50,14 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         .collect();
 
     category_column_validation_infractions.iter().for_each(|n| println!("{:?}", n));
-
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
     Ok(())
 }
 
 fn read_nodes_file(nodes_path: &path::PathBuf) -> Vec<Node> {
     let nodes_file = fs::File::open(nodes_path.clone()).unwrap();
-    let reader = io::BufReader::new(nodes_file);
+    let reader = io::BufReader::with_capacity(2_usize.pow(14), nodes_file);
     let mut rdr = csv::ReaderBuilder::new().has_headers(true).delimiter(b'\t').from_reader(reader);
-
     let mut nodes = vec![];
     for result in rdr.deserialize() {
         let record: Node = result.unwrap();
