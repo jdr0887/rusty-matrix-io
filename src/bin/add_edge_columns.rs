@@ -7,8 +7,6 @@ use itertools::Itertools;
 use polars::prelude::*;
 use std::error;
 use std::fs;
-use std::io;
-use std::io::prelude::*;
 use std::path;
 use std::time::Instant;
 
@@ -48,6 +46,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     let expected_columns = vec![
         "knowledge_level",
+        "agent_type",
         "primary_knowledge_source",
         "aggregator_knowledge_source",
         "publications",
