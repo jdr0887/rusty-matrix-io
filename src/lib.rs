@@ -5,6 +5,7 @@ extern crate log;
 use polars::prelude::*;
 use polars::prelude::{coalesce, IntoLazy};
 use serde_derive::{Deserialize, Serialize};
+use std::{fs, io, path};
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Node {
@@ -32,4 +33,29 @@ pub fn coalesce_columns(mut df: DataFrame, cols: Vec<&str>) -> DataFrame {
         }
     }
     df
+}
+
+pub fn read_edges_file(nodes_path: &path::PathBuf) -> Vec<Edge> {
+    let nodes_file = fs::File::open(nodes_path.clone()).unwrap();
+    let reader = io::BufReader::new(nodes_file);
+    let mut rdr = csv::ReaderBuilder::new().has_headers(true).delimiter(b'\t').from_reader(reader);
+
+    let mut edges = vec![];
+    for result in rdr.deserialize() {
+        let record: Edge = result.unwrap();
+        edges.push(record.clone());
+    }
+    edges
+}
+
+pub fn read_nodes_file(nodes_path: &path::PathBuf) -> Vec<Node> {
+    let nodes_file = fs::File::open(nodes_path.clone()).unwrap();
+    let reader = io::BufReader::with_capacity(2_usize.pow(14), nodes_file);
+    let mut rdr = csv::ReaderBuilder::new().has_headers(true).delimiter(b'\t').from_reader(reader);
+    let mut nodes = vec![];
+    for result in rdr.deserialize() {
+        let record: Node = result.unwrap();
+        nodes.push(record.clone());
+    }
+    nodes
 }

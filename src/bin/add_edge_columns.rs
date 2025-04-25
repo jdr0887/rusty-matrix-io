@@ -18,6 +18,15 @@ struct Options {
 
     #[clap(short = 'o', long, required = true)]
     output: path::PathBuf,
+
+    #[clap(short = 'p', long, required = true)]
+    primary_knowledge_source: String,
+
+    #[clap(short = 'k', long, default_value = "knowledge_assertion")]
+    knowledge_level: String,
+
+    #[clap(short = 'a', long, default_value = "data_analysis_pipeline")]
+    agent_type: String,
 }
 
 #[tokio::main]
@@ -29,11 +38,32 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     debug!("{:?}", options);
 
     let input = options.input;
-    let output = options.output;
 
+    let mut df = create_missing_columns(input).expect("Could not fill missing columns");
+
+    df = df
+        .clone()
+        .lazy()
+        .with_columns([
+            col("knowledge_level").fill_null(lit(options.knowledge_level)),
+            col("agent_type").fill_null(lit(options.agent_type)),
+            col("primary_knowledge_source").fill_null(lit(options.primary_knowledge_source)),
+        ])
+        .collect()
+        .unwrap();
+
+    let output = options.output;
+    let mut file = fs::File::create(output.as_path()).unwrap();
+    CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut df).unwrap();
+
+    info!("Duration: {}", format_duration(start.elapsed()).to_string());
+    Ok(())
+}
+
+fn create_missing_columns(input: path::PathBuf) -> Result<DataFrame, Box<dyn error::Error>> {
     let parse_options = CsvParseOptions::default().with_separator(b'\t');
 
-    let mut df = CsvReadOptions::default()
+    let df = CsvReadOptions::default()
         .with_parse_options(parse_options.clone())
         .with_has_header(true)
         .with_ignore_errors(true)
@@ -55,7 +85,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         "object_aspect_qualifier",
         "object_direction_qualifier",
     ]
-    .iter()
+    .into_iter()
     .map(|a| a.to_string())
     .collect_vec();
 
@@ -68,11 +98,6 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
             false => Some(Series::full_null(PlSmallStr::from(c), capacity, &DataType::String).lit()),
         })
         .collect();
-    df = df.clone().lazy().with_columns(new_columns).collect().unwrap();
 
-    let mut file = fs::File::create(output.as_path()).unwrap();
-    CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut df).unwrap();
-
-    info!("Duration: {}", format_duration(start.elapsed()).to_string());
-    Ok(())
+    Ok(df.clone().lazy().with_columns(new_columns).collect().unwrap())
 }
