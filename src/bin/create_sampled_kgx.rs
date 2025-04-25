@@ -80,7 +80,11 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         .collect()
         .unwrap();
 
-    let mut output_edges_file = fs::File::create(format!("{}/edges_{}.tsv", options.output_dir.to_string_lossy(), options.size.clone())).unwrap();
+    let mut edges_file_name = options.nodes.clone().file_name().unwrap().to_str().unwrap().to_string();
+    edges_file_name = edges_file_name.replace("nodes.", format!("edges_{}.", options.size.clone()).as_str());
+
+    debug!("edges_file_name: {}", edges_file_name);
+    let mut output_edges_file = fs::File::create(format!("{}/{}", options.output_dir.to_string_lossy(), edges_file_name)).unwrap();
     CsvWriter::new(&mut output_edges_file).with_separator(b'\t').finish(&mut edges_df).unwrap();
 
     let selected_edge_ids_df =
@@ -90,7 +94,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
             .unwrap();
     let selected_edge_ids = selected_edge_ids_df.column("id").unwrap().as_series().unwrap().clone();
 
-    let mut nodes_df = LazyCsvReader::new(options.nodes)
+    let mut nodes_df = LazyCsvReader::new(options.nodes.clone())
         .with_separator(b'\t')
         .with_truncate_ragged_lines(true)
         .with_has_header(true)
@@ -101,7 +105,11 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         .collect()
         .unwrap();
 
-    let mut output_nodes_file = fs::File::create(format!("{}/nodes_{}.tsv", options.output_dir.to_string_lossy(), options.size.clone())).unwrap();
+    let mut nodes_file_name = options.nodes.clone().file_name().unwrap().to_str().unwrap().to_string();
+    nodes_file_name = nodes_file_name.replace("nodes.", format!("nodes_{}.", options.size.clone()).as_str());
+
+    debug!("nodes_file_name: {}", nodes_file_name);
+    let mut output_nodes_file = fs::File::create(format!("{}/{}", options.output_dir.to_string_lossy(), nodes_file_name)).unwrap();
     CsvWriter::new(&mut output_nodes_file).with_separator(9u8).finish(&mut nodes_df).unwrap();
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
