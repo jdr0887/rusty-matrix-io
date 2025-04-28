@@ -57,7 +57,7 @@ async fn main() {
         .finish()
         .unwrap();
 
-    main_df = main_df.join(&first_df, ["identifier", "name", "category"], ["identifier", "name", "category"], join_args.clone(), None).expect("Could not join");
+    main_df = main_df.join(&first_df, ["identifier", "name", "category"], ["identifier", "name", "category"], join_args.clone()).expect("Could not join");
     let mut asdf = main_df.select(["id", "identifier"]).unwrap();
 
     println!("id & identifier columsn: {:?}", asdf);

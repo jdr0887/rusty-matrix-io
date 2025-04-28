@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let options = Options::parse();
     debug!("{:?}", options);
 
-    let primary_columns = vec!["id", "category", "all_categories", "name", "description", "equivalent_identifiers", "publications"];
+    let primary_columns = vec!["id", "category", "original_id", "all_categories", "name", "description", "equivalent_identifiers", "publications"];
 
     let tmp_df = LazyCsvReader::new(options.input.clone())
         .with_separator(b'\t')
