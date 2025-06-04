@@ -1,9 +1,8 @@
 use clap::Parser;
 use humantime::format_duration;
-use itertools::Itertools;
-use log::{debug, info, warn};
+use log::{debug, info};
 use polars::prelude::*;
-use rand::distr::{StandardUniform, Uniform};
+use rand::distr::Uniform;
 use rand::Rng;
 use std::fs;
 use std::time::Instant;
