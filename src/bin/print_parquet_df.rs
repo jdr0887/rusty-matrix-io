@@ -1,6 +1,6 @@
 use clap::Parser;
 use humantime::format_duration;
-use log::{debug, info, warn};
+use log::{debug, info};
 use polars::prelude::*;
 use std::time::Instant;
 use std::{error, path};
@@ -29,12 +29,21 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let mut file = std::fs::File::open(first_input.as_path()).unwrap();
     let mut df = ParquetReader::new(&mut file).finish().unwrap();
 
+    let column_names = df.get_column_names_str();
+    for cn in column_names.iter() {
+        let tmp_df = df.column(cn).unwrap().as_series().unwrap().value_counts(true, true, "counts".into(), false).unwrap();
+        println!("{}", tmp_df.head(None));
+    }
+
     for input in input_files.iter().skip(1) {
         let mut file = std::fs::File::open(input.as_path()).unwrap();
         let tmp = ParquetReader::new(&mut file).finish().unwrap();
         df.extend(&tmp).expect("Could not extend DF");
     }
     println!("{:?}", df.shape());
+
+    // let mut new_df = df.clone().lazy().filter(col("value").is_null()).collect().unwrap();
+    // println!("{}", new_df.head(None));
 
     match options.output {
         Some(output_path) => {
