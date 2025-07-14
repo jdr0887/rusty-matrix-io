@@ -1,6 +1,6 @@
 use clap::Parser;
 use humantime::format_duration;
-use log::{debug, info, warn};
+use log::{debug, info};
 use polars::prelude::*;
 use std::time::Instant;
 use std::{error, path};
@@ -15,8 +15,7 @@ struct Options {
     output: Option<path::PathBuf>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 

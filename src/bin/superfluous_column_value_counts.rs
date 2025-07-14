@@ -1,14 +1,9 @@
-#[macro_use]
-extern crate log;
-
 use clap::Parser;
 use humantime::format_duration;
 use itertools::Itertools;
-use log::{debug, info, warn};
-use plotlars::{Axis, Histogram, Legend, Plot, Rgb, ScatterPlot, Text, TickDirection};
+use log::{debug, info};
 use polars::functions::concat_df_horizontal;
 use polars::prelude::*;
-use std::io::{BufRead, BufWriter};
 use std::path;
 use std::time::Instant;
 use std::{error, fs};
@@ -26,8 +21,7 @@ struct Options {
     columns_to_ignore: Option<Vec<String>>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 

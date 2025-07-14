@@ -22,8 +22,7 @@ struct Options {
     output: path::PathBuf,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     env_logger::init();
 

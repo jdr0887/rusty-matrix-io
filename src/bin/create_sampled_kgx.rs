@@ -27,8 +27,7 @@ struct Options {
     random: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 

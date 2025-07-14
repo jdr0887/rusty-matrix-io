@@ -1,36 +1,17 @@
 #[macro_use]
 extern crate log;
 
-use async_once::AsyncOnce;
 use humantime::format_duration;
-use in_place::InPlace;
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use log::info;
 use polars::prelude::*;
-use reqwest::redirect::Policy;
-use reqwest::{header, Client};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use serde_json::ser::CharEscape::AsciiControl;
-use serde_with::skip_serializing_none;
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error;
-use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
 use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::prelude::*;
-use std::io::BufWriter;
 use std::path;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use std::time::Duration;
 use std::time::Instant;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 
