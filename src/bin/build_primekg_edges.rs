@@ -142,31 +142,32 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             when(col("predicate").str().contains_literal(lit("contraindication"))).then(lit("biolink:contraindicated_in")).otherwise(col("predicate")).alias("predicate")
         )
         // subject_aspect_qualifier & object_aspect_qualifier enum values: stability|abundance|expression|exposure
+        // DirectionQualifierEnum values: increased|upregulated|decreased|downregulated
 
         // anatomy_protein_absent	expression absent	prediction	computational_model											NCBIGene:4948	UBERON:0001476
         // I read this as 'the absence of the expression of NCBIGene:4948 affects UBERON:0001476'...is this right?
         .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("decrease")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("decreased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
         // anatomy_protein_present	expression present	prediction	computational_model											NCBIGene:81887	UBERON:0001323
         // I read this as 'the presence of the expression of NCBIGene:81887 affects UBERON:0001323'...is this right?
         .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("increase")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
         // disease_phenotype_negative	phenotype absent	prediction	computational_model											MONDO:0019309	HPO:0004386
         // I read this as 'the negative of the expression of MONDO:0019309 affects HPO:0004386'...is this right?
         .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("increase")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("decreased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
         // disease_phenotype_positive	phenotype present	prediction	computational_model											MONDO:0007058	HPO:0009611
         // I read this as 'the negative of the expression of MONDO:0019309 affects HPO:0004386'...is this right?
         .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("increase")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
         // exposure_disease	linked to	prediction	computational_model											CTD:C051786	MONDO:0002691
         // I read this as 'increased exposure to CTD:C051786 causes MONDO:0002691'
         .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("exposure")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("increase")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("biolink:causes")).otherwise(col("predicate")).alias("predicate"))
         // indication    indication      prediction      computational_model                                                                                     DrugBank:DB00264        MONDO:0005044
         // indication	indication
@@ -202,7 +203,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         // drug_protein	transporter
         // I read this as 'increased abundance of DrugBank:DB00257 affects NCBIGene:10599'
         .with_column(when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("abundance")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("increase")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
         .with_column(
             when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate")
         )
