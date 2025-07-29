@@ -3,8 +3,6 @@ use humantime::format_duration;
 use itertools::{join, Itertools};
 use log::{debug, info};
 use polars::prelude::*;
-use rand::distr::Uniform;
-use rand::Rng;
 use serde_yml::{to_value, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -109,6 +107,7 @@ fn create_map(df: &DataFrame) -> Result<BTreeMap<String, Value>, Box<dyn error::
         ),
         ("knowledge_level".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
         ("object_direction_qualifier".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
+        ("subject_direction_qualifier".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
     ]);
 
     for cn in primary_columns {
@@ -116,23 +115,23 @@ fn create_map(df: &DataFrame) -> Result<BTreeMap<String, Value>, Box<dyn error::
         let mut column_map = BTreeMap::new();
 
         match cn.as_str() {
-            "agent_type" | "knowledge_level" | "object_direction_qualifier" => {
+            "agent_type" | "knowledge_level" | "object_direction_qualifier" | "subject_direction_qualifier" => {
                 let cn_values_as_vec = known_type_values.get(&cn.to_string()).unwrap();
                 debug!("column name: {}, datatype: {:?}, values: {:?}", cn, datatype, cn_values_as_vec);
                 column_map.insert("type", to_value("generate_values").unwrap());
                 column_map.insert("sample_values", to_value(cn_values_as_vec).unwrap());
             }
             _ => {
-                if let Some(cn_series) = df.column(&cn).unwrap().unique().unwrap().as_series() {
+                if let Some(cn_series) = df.column(&cn).unwrap().as_series() {
                     let cn_values = cn_series.clone();
                     let cn_values_as_vec: Vec<Option<&str>> = cn_values.str().unwrap().into_iter().collect();
-                    let cn_values_as_vec = cn_values_as_vec.into_iter().filter_map(|a| a.map(|s| s.to_string())).collect_vec();
+                    let mut cn_values_as_vec = cn_values_as_vec.into_iter().filter_map(|a| a.map(|s| s.to_string())).dedup().collect_vec();
+                    if cn_values_as_vec.is_empty() {
+                        cn_values_as_vec.push("".to_string());
+                    }
                     debug!("column name: {}, datatype: {:?}, values: {:?}", cn, datatype, cn_values_as_vec);
                     column_map.insert("type", to_value("generate_values").unwrap());
                     column_map.insert("sample_values", to_value(cn_values_as_vec).unwrap());
-                } else {
-                    column_map.insert("type", to_value("generate_values").unwrap());
-                    column_map.insert("sample_values", to_value(vec!["".to_string()]).unwrap());
                 }
             }
         }
