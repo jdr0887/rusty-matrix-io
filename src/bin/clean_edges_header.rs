@@ -31,13 +31,13 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         "knowledge_level",
         "agent_type",
         "primary_knowledge_source",
+        "subject_aspect_qualifier",
+        "subject_direction_qualifier",
         "object_aspect_qualifier",
         "object_direction_qualifier",
         "aggregator_knowledge_source",
         "original_subject",
         "original_object",
-        "category",
-        "description",
     ];
 
     let tmp_df = LazyCsvReader::new(options.input.clone())
