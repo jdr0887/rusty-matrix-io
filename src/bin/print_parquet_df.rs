@@ -30,7 +30,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let column_names = df.get_column_names_str();
     for cn in column_names.iter() {
-        let tmp_df = df.column(cn).unwrap().as_series().unwrap().value_counts(true, true, "counts".into(), false).unwrap();
+        let tmp_df = df
+            .column(cn)
+            .unwrap()
+            .as_series()
+            .unwrap()
+            .value_counts(true, true, "counts".into(), false)
+            .unwrap();
         println!("{}", tmp_df.head(None));
     }
 

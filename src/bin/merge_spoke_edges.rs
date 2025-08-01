@@ -68,16 +68,38 @@ fn merge_files(output_path: &PathBuf, edge_file_names: Vec<PathBuf>) {
     for edge_file_path in edge_file_names.into_iter() {
         info!("edge_file_path: {:?}", edge_file_path);
 
-        let df = LazyCsvReader::new(edge_file_path.clone()).with_separator(b'\t').with_truncate_ragged_lines(true).with_has_header(true).with_ignore_errors(true).finish().unwrap();
+        let df = LazyCsvReader::new(edge_file_path.clone())
+            .with_separator(b'\t')
+            .with_truncate_ragged_lines(true)
+            .with_has_header(true)
+            .with_ignore_errors(true)
+            .finish()
+            .unwrap();
 
         main_df = main_df
             .clone()
             .lazy()
-            .join(df.clone(), [col("subject"), col("predicate"), col("object")], [col("subject"), col("predicate"), col("object")], join_args.clone())
+            .join(
+                df.clone(),
+                [col("subject"), col("predicate"), col("object")],
+                [col("subject"), col("predicate"), col("object")],
+                join_args.clone(),
+            )
             .collect()
             .expect("Could not join");
 
-        let columns = vec!["source", "sources", "unbiased", "evidence", "vestige", "version", "p_value", "direction", "alternative_allele", "reference_allele"];
+        let columns = vec![
+            "source",
+            "sources",
+            "unbiased",
+            "evidence",
+            "vestige",
+            "version",
+            "p_value",
+            "direction",
+            "alternative_allele",
+            "reference_allele",
+        ];
         main_df = rusty_matrix_io::coalesce_columns(main_df, columns);
 
         println!("column names: {:?}", main_df.get_column_names());

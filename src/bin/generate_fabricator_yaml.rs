@@ -1,9 +1,9 @@
 use clap::Parser;
 use humantime::format_duration;
-use itertools::{join, Itertools};
+use itertools::{Itertools, join};
 use log::{debug, info};
 use polars::prelude::*;
-use serde_yml::{to_value, Value};
+use serde_yml::{Value, to_value};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{BufWriter, Write};
@@ -45,7 +45,10 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let edge_id_columns_df = edges_df.clone().lazy().select([col("subject"), col("object")]).collect().unwrap();
 
     let edge_ids_df = concat(
-        [edge_id_columns_df.clone().lazy().select([col("subject").alias("id")]), edge_id_columns_df.clone().lazy().select([col("object").alias("id")])],
+        [
+            edge_id_columns_df.clone().lazy().select([col("subject").alias("id")]),
+            edge_id_columns_df.clone().lazy().select([col("object").alias("id")]),
+        ],
         UnionArgs::default(),
     )
     .unwrap()
@@ -84,7 +87,11 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 }
 
 fn create_map(df: &DataFrame) -> Result<BTreeMap<String, Value>, Box<dyn error::Error>> {
-    let primary_columns = df.get_column_names_str().iter().filter_map(|c| if !c.starts_with("_") { Some(c.to_string()) } else { None }).collect_vec();
+    let primary_columns = df
+        .get_column_names_str()
+        .iter()
+        .filter_map(|c| if !c.starts_with("_") { Some(c.to_string()) } else { None })
+        .collect_vec();
     info!("primary columns: {:?}", primary_columns);
 
     let nodes_schema = df.schema();
@@ -105,9 +112,39 @@ fn create_map(df: &DataFrame) -> Result<BTreeMap<String, Value>, Box<dyn error::
                 "not_provided",
             ],
         ),
-        ("knowledge_level".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
-        ("object_direction_qualifier".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
-        ("subject_direction_qualifier".to_string(), vec!["knowledge_assertion", "logical_entailment", "prediction", "statistical_association", "observation", "not_provided"]),
+        (
+            "knowledge_level".to_string(),
+            vec![
+                "knowledge_assertion",
+                "logical_entailment",
+                "prediction",
+                "statistical_association",
+                "observation",
+                "not_provided",
+            ],
+        ),
+        (
+            "object_direction_qualifier".to_string(),
+            vec![
+                "knowledge_assertion",
+                "logical_entailment",
+                "prediction",
+                "statistical_association",
+                "observation",
+                "not_provided",
+            ],
+        ),
+        (
+            "subject_direction_qualifier".to_string(),
+            vec![
+                "knowledge_assertion",
+                "logical_entailment",
+                "prediction",
+                "statistical_association",
+                "observation",
+                "not_provided",
+            ],
+        ),
     ]);
 
     for cn in primary_columns {

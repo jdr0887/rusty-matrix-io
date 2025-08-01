@@ -40,13 +40,33 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
     let column_names = match options.columns_to_ignore {
-        Some(cols) => df.get_column_names_str().iter().filter_map(|c| if c.starts_with("_") && !cols.contains(&c.to_string()) { Some(c.to_string()) } else { None }).collect_vec(),
-        None => df.get_column_names_str().iter().filter_map(|c| if c.starts_with("_") { Some(c.to_string()) } else { None }).collect_vec(),
+        Some(cols) => df
+            .get_column_names_str()
+            .iter()
+            .filter_map(|c| {
+                if c.starts_with("_") && !cols.contains(&c.to_string()) {
+                    Some(c.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect_vec(),
+        None => df
+            .get_column_names_str()
+            .iter()
+            .filter_map(|c| if c.starts_with("_") { Some(c.to_string()) } else { None })
+            .collect_vec(),
     };
 
     let mut dfs = vec![];
     for cn in column_names {
-        let tmp_df = df.column(cn.as_str()).unwrap().as_series().unwrap().value_counts(true, true, "counts".into(), false).unwrap();
+        let tmp_df = df
+            .column(cn.as_str())
+            .unwrap()
+            .as_series()
+            .unwrap()
+            .value_counts(true, true, "counts".into(), false)
+            .unwrap();
         let head_df = tmp_df.head(None).lazy();
         let tail_df = tmp_df.tail(None).lazy();
         let combined_df = concat([head_df, tail_df], UnionArgs::default()).unwrap().collect().unwrap();

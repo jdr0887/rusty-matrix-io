@@ -8,17 +8,17 @@ use lazy_static::lazy_static;
 use log::{info, warn};
 use polars::prelude::*;
 use reqwest::redirect::Policy;
-use reqwest::{header, Client};
+use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::ser::CharEscape::AsciiControl;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error;
 use std::fs;
-use std::fs::{read_dir, File};
+use std::fs::{File, read_dir};
 use std::io;
-use std::io::prelude::*;
 use std::io::BufWriter;
+use std::io::prelude::*;
 use std::path;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -241,9 +241,20 @@ fn merge_files(output_path: &PathBuf, node_file_names: Vec<PathBuf>) {
     for node_file_path in node_file_names.into_iter() {
         info!("node_file_path: {:?}", node_file_path);
 
-        let df = LazyCsvReader::new(node_file_path.clone()).with_separator(b'\t').with_truncate_ragged_lines(true).with_has_header(true).with_ignore_errors(true).finish().unwrap();
+        let df = LazyCsvReader::new(node_file_path.clone())
+            .with_separator(b'\t')
+            .with_truncate_ragged_lines(true)
+            .with_has_header(true)
+            .with_ignore_errors(true)
+            .finish()
+            .unwrap();
 
-        main_df = main_df.clone().lazy().join(df.clone(), [col("id"), col("category")], [col("id"), col("category")], join_args.clone()).collect().expect("Could not join");
+        main_df = main_df
+            .clone()
+            .lazy()
+            .join(df.clone(), [col("id"), col("category")], [col("id"), col("category")], join_args.clone())
+            .collect()
+            .expect("Could not join");
 
         let columns = vec![
             "name",
