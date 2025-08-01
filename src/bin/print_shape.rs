@@ -1,11 +1,9 @@
-#[macro_use]
 extern crate log;
 
 use clap::Parser;
 use humantime::format_duration;
 use itertools::Itertools;
-use log::{debug, info, warn};
-use polars::prelude::*;
+use log::{debug, info};
 use std::error;
 use std::io::BufRead;
 use std::path;
@@ -18,8 +16,7 @@ struct Options {
     input: Vec<path::PathBuf>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 

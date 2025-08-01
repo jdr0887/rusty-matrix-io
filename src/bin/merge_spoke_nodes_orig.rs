@@ -1,20 +1,10 @@
-use humantime::format_duration;
 use itertools::Itertools;
-use log::{info, warn};
 use polars::prelude::*;
-use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 use std::ffi::OsStr;
-use std::fmt::{Display, Formatter};
 use std::fs;
-use std::io;
-use std::io::prelude::*;
 use std::path;
-use std::time::Instant;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes");
     let mut node_files = fs::read_dir(nodes_path)
         .unwrap()
@@ -38,7 +28,7 @@ async fn main() {
     let join_args = JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns);
 
     let first_nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes/node_0.tsv");
-    let mut first_df = CsvReadOptions::default()
+    let first_df = CsvReadOptions::default()
         .with_parse_options(parse_options.clone())
         .with_has_header(true)
         .with_ignore_errors(true)
@@ -48,7 +38,7 @@ async fn main() {
         .unwrap();
 
     let second_nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes/node_1.tsv");
-    let mut second_df = CsvReadOptions::default()
+    let second_df = CsvReadOptions::default()
         .with_parse_options(parse_options.clone())
         .with_has_header(true)
         .with_ignore_errors(true)
@@ -57,7 +47,7 @@ async fn main() {
         .finish()
         .unwrap();
 
-    main_df = main_df.join(&first_df, ["identifier", "name", "category"], ["identifier", "name", "category"], join_args.clone()).expect("Could not join");
+    main_df = main_df.join(&first_df, ["identifier", "name", "category"], ["identifier", "name", "category"], join_args.clone(), None).expect("Could not join");
     let mut asdf = main_df.select(["id", "identifier"]).unwrap();
 
     println!("id & identifier columsn: {:?}", asdf);
