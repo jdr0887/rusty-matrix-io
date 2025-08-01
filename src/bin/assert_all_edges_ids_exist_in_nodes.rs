@@ -1,9 +1,11 @@
 use clap::Parser;
 use humantime::format_duration;
+use itertools::Itertools;
 use log::{debug, info};
 use polars::prelude::*;
-use rand::Rng;
 use rand::distr::Uniform;
+use rand::Rng;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::time::Instant;
 use std::{error, path};
@@ -48,7 +50,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     .collect()
     .unwrap();
 
-    let edges_ids_series = edge_ids_df.column("id").unwrap().sort(SortOptions::default()).unwrap().as_series().unwrap();
+    let edges_id_column = edge_ids_df.column("id").unwrap();
+    let edges_id_series = edges_id_column.as_series().unwrap();
+
+    let edges_ids: BTreeSet<String> = edges_id_series.str().unwrap().into_iter().filter_map(|a| a.map(String::from)).collect();
 
     let mut nodes_df = LazyCsvReader::new(options.nodes.clone())
         .with_separator(b'\t')
@@ -61,7 +66,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .collect()
         .unwrap();
 
-    let nodes_ids_series = nodes_df.column("id").unwrap().sort(SortOptions::default()).unwrap().as_series().unwrap();
+    let nodes_id_column = nodes_df.column("id").unwrap();
+    let nodes_id_series = nodes_id_column.as_series().unwrap();
+
+    let nodes_ids: BTreeSet<String> = nodes_id_series.str().unwrap().into_iter().filter_map(|a| a.map(String::from)).collect();
+
+    println!(
+        "nodes_ids.difference(edges_ids): {:?}",
+        nodes_ids.difference(&edges_ids).cloned().collect::<BTreeSet<_>>()
+    );
+    println!(
+        "edges_ids.difference(nodes_ids): {:?}",
+        edges_ids.difference(&nodes_ids).cloned().collect::<BTreeSet<_>>()
+    );
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
     Ok(())
