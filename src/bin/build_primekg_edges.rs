@@ -34,16 +34,45 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .collect()
         .unwrap();
 
+    // need to explode MONDO_grouped
+    let mondo_grouped_exploded = |edges_df: DataFrame, x_or_y: String| -> DataFrame {
+        let source = format!("{}_source", x_or_y);
+        let id = format!("{}_id", x_or_y);
+        let source_mondo_grouped_df = edges_df
+            .clone()
+            .lazy()
+            .filter(col(source.as_str()).eq(lit("MONDO_grouped")))
+            .with_column(col(id.as_str()).str().split(lit("_")).alias(id.as_str()))
+            .with_column(
+                when(col(source.as_str()).eq(lit("MONDO_grouped")))
+                    .then(lit("MONDO"))
+                    .otherwise(col(source.as_str()))
+                    .alias(source.as_str()),
+            )
+            .explode([col(id)]);
+
+        let source_not_mondo_grouped = edges_df.clone().lazy().filter(col(source.as_str()).eq(lit("MONDO_grouped")).not());
+
+        concat([source_mondo_grouped_df, source_not_mondo_grouped], UnionArgs::default())
+            .unwrap()
+            .collect()
+            .unwrap()
+    };
+
+    edges_df = mondo_grouped_exploded(edges_df, "x".into());
+    edges_df = mondo_grouped_exploded(edges_df, "y".into());
+
     edges_df = edges_df
         .clone()
         .lazy()
         .with_columns([
-            lit("prediction").alias("knowledge_level"),
-            lit("computational_model").alias("agent_type"),
-            lit(LiteralValue::untyped_null()).cast(DataType::String).alias("primary_knowledge_source"),
+            lit("knowledge_assertion").alias("knowledge_level"),
+            lit("not_provided").alias("agent_type"),
+            lit("infores:primekg").alias("primary_knowledge_source"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("aggregator_knowledge_source"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("original_subject"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("original_object"),
+            lit(LiteralValue::untyped_null()).cast(DataType::String).alias("negated"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("publications"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("subject_aspect_qualifier"),
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("subject_direction_qualifier"),
@@ -52,10 +81,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             lit(LiteralValue::untyped_null()).cast(DataType::String).alias("upstream_data_source"),
         ])
         .with_column(
-            when(col("x_source").str().contains_literal(lit("NCBI"))).then(concat_str([col("x_source"), col("x_id")], "Gene:", true)).otherwise(col("x_source")).alias("subject"),
+            when(col("x_source").eq(lit("NCBI")))
+                .then(concat_str([col("x_source"), col("x_id")], "Gene:", true))
+                .otherwise(col("x_source"))
+                .alias("subject"),
         )
         .with_column(
-            when(col("x_source").str().contains(lit("REACTOME"), true)).then(concat_str([lit("REACT"), col("x_id")], ":", true)).otherwise(col("subject")).alias("subject"),
+            when(col("x_source").str().contains(lit("REACTOME"), true))
+                .then(concat_str([lit("REACT"), col("x_id")], ":", true))
+                .otherwise(col("subject"))
+                .alias("subject"),
         )
         .with_column(
             when(col("x_source").str().contains(lit("^(HPO|MONDO|UBERON)$"), true))
@@ -70,11 +105,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .alias("subject"),
         )
         .with_column(
-            when(col("y_source").str().contains_literal(lit("NCBI"))).then(concat_str([col("y_source"), col("y_id")], "Gene:", true)).otherwise(col("x_source")).alias("object"),
+            when(col("y_source").eq(lit("NCBI")))
+                .then(concat_str([col("y_source"), col("y_id")], "Gene:", true))
+                .otherwise(col("y_source"))
+                .alias("object"),
         )
-        .with_column(when(col("y_source").str().contains(lit("REACTOME"), true)).then(concat_str([lit("REACT"), col("y_id")], ":", true)).otherwise(col("object")).alias("object"))
         .with_column(
-            when(col("y_source").str().contains(lit("^(HPO|MONDO|UBERON)$"), true))
+            when(col("y_source").str().contains(lit("REACTOME"), true))
+                .then(concat_str([lit("REACT"), col("y_id")], ":", true))
+                .otherwise(col("object"))
+                .alias("object"),
+        )
+        .with_column(
+            when(col("y_source").str().contains(lit("^(HPO||MONDO|UBERON)$"), true))
                 .then(concat_str([col("y_source"), col("y_id").str().pad_start(7, '0')], ":", true))
                 .otherwise(col("object"))
                 .alias("object"),
@@ -85,7 +128,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .otherwise(col("object"))
                 .alias("object"),
         )
-        .drop(["x_index", "x_id", "x_type", "x_name", "x_source", "y_index", "y_id", "y_type", "y_name", "y_source"])
+        .drop([
+            "x_index", "x_id", "x_type", "x_name", "x_source", "y_index", "y_id", "y_type", "y_name", "y_source",
+        ])
         .rename(["relation"], ["predicate"], true)
         // bioprocess_protein	interacts with
         // cellcomp_protein	interacts with
@@ -100,9 +145,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 lit("^(bioprocess_protein|cellcomp_protein|exposure_bioprocess|exposure_cellcomp|exposure_molfunc|exposure_protein|molfunc_protein|pathway_protein)$"),
                 true,
             ))
-            .then(lit("biolink:interacts_with"))
-            .otherwise(col("predicate"))
-            .alias("predicate"),
+                .then(lit("biolink:interacts_with"))
+                .otherwise(col("predicate"))
+                .alias("predicate"),
         )
         .with_column(
             // disease_protein	associated with
@@ -125,97 +170,69 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 lit("^(anatomy_anatomy|bioprocess_bioprocess|cellcomp_cellcomp|disease_disease|exposure_exposure|molfunc_molfunc|pathway_pathway|phenotype_phenotype)$"),
                 true,
             ))
-            .then(lit("biolink:superclass_of"))
-            .otherwise(col("predicate"))
-            .alias("predicate"),
+                .then(lit("biolink:superclass_of"))
+                .otherwise(col("predicate"))
+                .alias("predicate"),
         )
         // protein_protein	ppi
         .with_column(
-            when(col("predicate").str().contains_literal(lit("protein_protein"))).then(lit("biolink:interacts_with")).otherwise(col("predicate")).alias("predicate"),
+            when(col("predicate").eq(lit("protein_protein"))).then(lit("biolink:interacts_with")).otherwise(col("predicate")).alias("predicate"),
         )
         // drug_effect	side effect
         .with_column(
-            when(col("predicate").str().contains_literal(lit("drug_effect"))).then(lit("biolink:has_side_effect")).otherwise(col("predicate")).alias("predicate")
+            when(col("predicate").eq(lit("drug_effect"))).then(lit("biolink:has_side_effect")).otherwise(col("predicate")).alias("predicate")
         )
         // contraindication	contraindication
         .with_column(
-            when(col("predicate").str().contains_literal(lit("contraindication"))).then(lit("biolink:contraindicated_in")).otherwise(col("predicate")).alias("predicate")
+            when(col("predicate").eq(lit("contraindication"))).then(lit("biolink:contraindicated_in")).otherwise(col("predicate")).alias("predicate")
         )
-        // subject_aspect_qualifier & object_aspect_qualifier enum values: stability|abundance|expression|exposure
-        // DirectionQualifierEnum values: increased|upregulated|decreased|downregulated
-
         // anatomy_protein_absent	expression absent	prediction	computational_model											NCBIGene:4948	UBERON:0001476
-        // I read this as 'the absence of the expression of NCBIGene:4948 affects UBERON:0001476'...is this right?
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("decreased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_absent"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
-
+        .with_column(when(col("predicate").eq(lit("anatomy_protein_absent"))).then(lit("true")).otherwise(lit(LiteralValue::untyped_null())).alias("negated"))
+        .with_column(when(col("predicate").eq(lit("anatomy_protein_absent"))).then(lit("biolink:expressed_in")).otherwise(col("predicate")).alias("predicate"))
         // anatomy_protein_present	expression present	prediction	computational_model											NCBIGene:81887	UBERON:0001323
-        // I read this as 'the presence of the expression of NCBIGene:81887 affects UBERON:0001323'...is this right?
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("anatomy_protein_present"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
-
+        .with_column(when(col("predicate").eq(lit("anatomy_protein_present"))).then(lit("biolink:expressed_in")).otherwise(col("predicate")).alias("predicate"))
         // disease_phenotype_negative	phenotype absent	prediction	computational_model											MONDO:0019309	HPO:0004386
-        // I read this as 'the lack of MONDO:0019309 does not cause HPO:0004386'...is this right?
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("exposure")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("decreased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_negative"))).then(lit("biolink:causes")).otherwise(col("predicate")).alias("predicate"))
-
+        .with_column(when(col("predicate").eq(lit("disease_phenotype_negative"))).then(lit("true")).otherwise(lit(LiteralValue::untyped_null())).alias("negated"))
+        .with_column(when(col("predicate").eq(lit("disease_phenotype_negative"))).then(lit("biolink:has_phenotype")).otherwise(col("predicate")).alias("predicate"))
         // disease_phenotype_positive	phenotype present	prediction	computational_model											MONDO:0007058	HPO:0009611
-        // I read this as 'the negative of the expression of MONDO:0019309 affects HPO:0004386'...is this right?
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("expression")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("disease_phenotype_positive"))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate"))
-
+        .with_column(when(col("predicate").eq(lit("disease_phenotype_positive"))).then(lit("biolink:has_phenotype")).otherwise(col("predicate")).alias("predicate"))
         // exposure_disease	linked to	prediction	computational_model											CTD:C051786	MONDO:0002691
-        // I read this as 'increased exposure to CTD:C051786 causes MONDO:0002691'
-        .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("exposure")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        .with_column(when(col("predicate").str().contains_literal(lit("exposure_disease"))).then(lit("biolink:causes")).otherwise(col("predicate")).alias("predicate"))
-
+        .with_column(when(col("predicate").eq(lit("exposure_disease"))).then(lit("biolink:correlated_with")).otherwise(col("predicate")).alias("predicate"))
         // indication    indication      prediction      computational_model                                                                                     DrugBank:DB00264        MONDO:0005044
-        // indication	indication
         .with_column(
-            when(col("predicate").str().contains_literal(lit("indication"))).then(lit("biolink:indicated_in")).otherwise(col("predicate")).alias("predicate")
+            when(col("predicate").eq(lit("indication"))).then(lit("biolink:treats")).otherwise(col("predicate")).alias("predicate")
         )
-
         // off-label use        off-label use   prediction      computational_model                                                                                     DrugBank:DB00796        MONDO:0005016
-        // off-label use	off-label use
         .with_column(
-            when(col("predicate").str().contains_literal(lit("off-label use"))).then(lit("biolink:applied_to_treat")).otherwise(col("predicate")).alias("predicate")
+            when(col("predicate").eq(lit("off-label use"))).then(lit("biolink:applied_to_treat")).otherwise(col("predicate")).alias("predicate")
         )
-
         // drug_drug       synergistic interaction prediction      computational_model                                                                                     DrugBank:DB01431        DrugBank:DB06605
-        // drug_drug	synergistic interaction -> causes increased effect/potency
         .with_column(
-            when(col("predicate").str().contains_literal(lit("drug_drug"))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
+            when(col("predicate").eq(lit("drug_drug"))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
         )
-
         // drug_protein    enzyme  prediction      computational_model                                                                                     DrugBank:DB00908        NCBIGene:1565
-        // drug_protein	enzyme
-        // .with_column(
-        //     when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("enzyme")))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
-        // )
-
+        .with_column(
+            when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("enzyme")))).then(lit("amount")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier")
+        )
+        .with_column(
+            when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("enzyme")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        )
         // drug_protein    target  prediction      computational_model                                                                                     DrugBank:DB00334        NCBIGene:1128
-        // drug_protein	target
-        // .with_column(
-        //     when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("target")))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
-        // )
+        .with_column(
+            when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("target")))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
+        )
         // drug_protein    carrier prediction      computational_model                                                                                     DrugBank:DB00451        NCBIGene:6906
-        // drug_protein	carrier
-        // .with_column(
-        //     when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("carrier")))).then(lit("biolink:???")).otherwise(col("predicate")).alias("predicate")
-        // )
+        .with_column(
+            when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("carrier")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        )
         // drug_protein    transporter     prediction      computational_model                                                                                     DrugBank:DB00257        NCBIGene:10599
-        // drug_protein	transporter
-        // I read this as 'increased abundance of DrugBank:DB00257 affects NCBIGene:10599'
-        // .with_column(when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("abundance")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
-        // .with_column(when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
-        // .with_column(
-        //     when(col("predicate").str().contains_literal(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("biolink:affects")).otherwise(col("predicate")).alias("predicate")
-        // )
+        .with_column(when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("transport")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
+        .with_column(when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(
+            when(col("predicate").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        )
+        .drop(["display_relation"])
+        .unique(Some(vec!["subject".into(), "predicate".into(), "object".into()]), UniqueKeepStrategy::First)
         .collect()
         .unwrap();
 
