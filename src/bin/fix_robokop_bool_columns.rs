@@ -110,11 +110,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reader = std::io::BufReader::new(fs::File::open(options.input.clone()).unwrap());
     reader.lines().skip(1).for_each(|line| {
         let line = line.unwrap();
-        let line_split = line.split("\t").collect_vec();
+        let line_split = line.split('\t').collect_vec();
+        debug!("{:?}", line_split);
 
         let mut new_line = String::new();
         keep_columns.iter().cloned().for_each(|(idx, _col)| {
-            let value = line_split.get(idx).unwrap();
+            let value = line_split.get(idx).expect(format!("Could not unwrap: {} at index: {}", _col, idx).as_str());
             new_line.push_str(format!("{}\t", value).as_str());
         });
 
