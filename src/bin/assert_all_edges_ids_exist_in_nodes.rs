@@ -1,12 +1,8 @@
 use clap::Parser;
 use humantime::format_duration;
-use itertools::Itertools;
 use log::{debug, info};
 use polars::prelude::*;
-use rand::distr::Uniform;
-use rand::Rng;
-use std::collections::{BTreeSet, HashSet};
-use std::fs;
+use std::collections::BTreeSet;
 use std::time::Instant;
 use std::{error, path};
 
