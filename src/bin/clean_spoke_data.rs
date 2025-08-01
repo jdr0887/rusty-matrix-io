@@ -13,8 +13,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::error;
 use std::fs;
 use std::io;
-use std::io::prelude::*;
 use std::io::BufWriter;
+use std::io::prelude::*;
 use std::path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -25,7 +25,11 @@ lazy_static! {
         let mut headers = header::HeaderMap::new();
         headers.insert(header::ACCEPT, header::HeaderValue::from_static("application/json"));
         headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_static("application/json"));
-        let result = reqwest::Client::builder().redirect(Policy::limited(5)).timeout(Duration::from_secs(900)).default_headers(headers).build();
+        let result = reqwest::Client::builder()
+            .redirect(Policy::limited(5))
+            .timeout(Duration::from_secs(900))
+            .default_headers(headers)
+            .build();
 
         match result {
             Ok(request_client) => request_client,
@@ -133,14 +137,21 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
             let request_client = REQWEST_CLIENT.get().await;
 
             debug!("nn_payload: {:?}", serde_json::to_string_pretty(&nn_payload));
-            if let Ok(response) = request_client.post("https://nodenormalization-sri.renci.org/1.5/get_normalized_nodes").json(&nn_payload).send().await {
+            if let Ok(response) = request_client
+                .post("https://nodenormalization-sri.renci.org/1.5/get_normalized_nodes")
+                .json(&nn_payload)
+                .send()
+                .await
+            {
                 debug!("response.status(): {}", response.status());
                 if let Ok(response_json) = response.json::<HashMap<String, Option<NNResponse>>>().await {
                     for (k, v) in response_json.iter() {
                         if let Some(n) = chunk.iter().find_or_first(|c| c.identifier.eq(k)) {
                             match v {
                                 None => {
-                                    let ancestors = category_ancestor_mapping.get(&n.category).expect(format!("Could not get ancestors: {:?}", n).as_str());
+                                    let ancestors = category_ancestor_mapping
+                                        .get(&n.category)
+                                        .expect(format!("Could not get ancestors: {:?}", n).as_str());
                                     writeln!(node_output_bf, "{}\t{}\t{}", n.identifier, ancestors, n.remainder).expect("Could not write to node_output_buf");
                                     node_output_bf.flush().unwrap();
                                 }
@@ -230,7 +241,11 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
             //
             // let mut file = fs::File::create(edge_file_path.as_path()).unwrap();
             // CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut df).unwrap();
-            info!("Duration to write {:?}: {}", edge_file_path, format_duration(start_modifying_edge_file.elapsed()).to_string());
+            info!(
+                "Duration to write {:?}: {}",
+                edge_file_path,
+                format_duration(start_modifying_edge_file.elapsed()).to_string()
+            );
         }
 
         // break;
@@ -259,7 +274,12 @@ fn read_nodes_file(nodes_file_path: &path::PathBuf) -> Vec<Node> {
             let split = line.split('\t').collect_vec();
             if split.get(2).is_some() {
                 let (left, right) = split.split_at(3);
-                return Some(Node { id: left[0].to_string(), category: left[1].to_string(), identifier: left[2].to_string(), remainder: right.join("\t") });
+                return Some(Node {
+                    id: left[0].to_string(),
+                    category: left[1].to_string(),
+                    identifier: left[2].to_string(),
+                    remainder: right.join("\t"),
+                });
             }
             None
         })
@@ -279,7 +299,12 @@ fn read_edges_file(edges_file_path: &path::PathBuf) -> Vec<Edge> {
             let split = line.split('\t').collect_vec();
             if split.get(2).is_some() {
                 let (left, right) = split.split_at(3);
-                return Some(Edge { subject: left[0].to_string(), predicate: left[2].to_string(), object: left[1].to_string(), remainder: right.join("\t") });
+                return Some(Edge {
+                    subject: left[0].to_string(),
+                    predicate: left[2].to_string(),
+                    object: left[1].to_string(),
+                    remainder: right.join("\t"),
+                });
             }
             None
         })
@@ -379,7 +404,11 @@ async fn create_category_mapping() -> BTreeMap<String, String> {
     let mut ret: BTreeMap<String, String> = BTreeMap::new();
     for (k, v) in category_mapping.iter() {
         if !v.is_empty() {
-            if let Ok(response) = request_client.get(format!("https://biolink-lookup.ci.transltr.io/bl/biolink%3A{}/ancestors?version=v4.2.2", v)).send().await {
+            if let Ok(response) = request_client
+                .get(format!("https://biolink-lookup.ci.transltr.io/bl/biolink%3A{}/ancestors?version=v4.2.2", v))
+                .send()
+                .await
+            {
                 // println!("{:?}", response.text().await);
                 let ancestors: Vec<String> = response.json().await.expect("Could not get ancestors");
                 ret.insert(k.clone(), ancestors.join(SEPARATOR.as_str()));
@@ -437,7 +466,12 @@ mod test {
                 let line = line.unwrap();
                 let split = line.split('\t').collect_vec();
                 let (left, right) = split.split_at(3);
-                Node { id: left[0].to_string(), category: left[1].to_string(), identifier: left[2].to_string(), remainder: right.join("\t") }
+                Node {
+                    id: left[0].to_string(),
+                    category: left[1].to_string(),
+                    identifier: left[2].to_string(),
+                    remainder: right.join("\t"),
+                }
             })
             .collect();
         nodes.sort_by(|a, b| a.identifier.cmp(&b.identifier));
@@ -473,7 +507,12 @@ mod test {
 
         println!("df: {:?}", df);
         df.apply("predicate", |c| {
-            c.str().unwrap().into_iter().map(|opt_name: Option<&str>| opt_name.map(|name: &str| format!("biolink:{}", name))).collect::<StringChunked>().into_column()
+            c.str()
+                .unwrap()
+                .into_iter()
+                .map(|opt_name: Option<&str>| opt_name.map(|name: &str| format!("biolink:{}", name)))
+                .collect::<StringChunked>()
+                .into_column()
         })
         .expect("Could not modify df");
         df = df.lazy().with_columns([col("subject").strict_cast(DataType::String)]).collect().unwrap();
@@ -484,8 +523,14 @@ mod test {
                 .clone()
                 .lazy()
                 .with_columns([
-                    when(col("subject").eq(lit(c.id.clone()))).then(lit(c.identifier.clone())).otherwise(col("subject")).alias("subject"),
-                    when(col("object").eq(lit(c.id.clone()))).then(lit(c.identifier.clone())).otherwise(col("object")).alias("object"),
+                    when(col("subject").eq(lit(c.id.clone())))
+                        .then(lit(c.identifier.clone()))
+                        .otherwise(col("subject"))
+                        .alias("subject"),
+                    when(col("object").eq(lit(c.id.clone())))
+                        .then(lit(c.identifier.clone()))
+                        .otherwise(col("object"))
+                        .alias("object"),
                 ])
                 .collect()
                 .unwrap();

@@ -4,7 +4,7 @@ extern crate log;
 use clap::Parser;
 use humantime::format_duration;
 use itertools::Itertools;
-use polars::prelude::{col, lit, when, CsvWriter, LazyCsvReader, LazyFileListReader, SerWriter};
+use polars::prelude::{CsvWriter, LazyCsvReader, LazyFileListReader, SerWriter, col, lit, when};
 use rayon::prelude::*;
 use std::error::Error;
 use std::fs;
@@ -45,9 +45,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .finish()
         .unwrap()
         .with_columns([when(
-            col(options.column.clone()).str().contains_literal(lit(unit_separator.clone())).or(col(options.column.clone()).str().contains_literal(lit(comma.clone()))),
+            col(options.column.clone())
+                .str()
+                .contains_literal(lit(unit_separator.clone()))
+                .or(col(options.column.clone()).str().contains_literal(lit(comma.clone()))),
         )
-        .then(col(options.column.clone()).str().replace_all(lit(unit_separator.clone()), lit(pipe.clone()), true))
+        .then(
+            col(options.column.clone())
+                .str()
+                .replace_all(lit(unit_separator.clone()), lit(pipe.clone()), true),
+        )
         .otherwise(col(options.column.clone()))
         .alias(options.column.clone())])
         .collect()

@@ -40,7 +40,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .finish()
         .unwrap();
 
-    main_df = main_df.clone().lazy().join(nodes_df.clone(), [col("node_index")], [col("node_index")], join_args.clone()).collect().expect("Could not join");
+    main_df = main_df
+        .clone()
+        .lazy()
+        .join(nodes_df.clone(), [col("node_index")], [col("node_index")], join_args.clone())
+        .collect()
+        .expect("Could not join");
     debug!("column names: {:?}", main_df.get_column_names_str());
 
     // node_index,description,half_life,indication,mechanism_of_action,protein_binding,pharmacodynamics,state,atc_1,atc_2,atc_3,atc_4,category,group,pathway,molecular_weight,tpsa,clogp
@@ -51,7 +56,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .with_has_header(true)
         .finish()
         .unwrap();
-    main_df = main_df.clone().lazy().join(drug_features_df.clone(), [col("node_index")], [col("node_index")], join_args.clone()).collect().expect("Could not join");
+    main_df = main_df
+        .clone()
+        .lazy()
+        .join(drug_features_df.clone(), [col("node_index")], [col("node_index")], join_args.clone())
+        .collect()
+        .expect("Could not join");
     main_df = rusty_matrix_io::coalesce_columns(main_df, vec!["node_index"]);
     debug!("column names: {:?}", main_df.get_column_names_str());
     debug!("adding drug features: {:?}", main_df.head(None));
@@ -64,7 +74,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .with_has_header(true)
         .finish()
         .unwrap();
-    main_df = main_df.clone().lazy().join(disease_features_df.clone(), [col("node_index")], [col("node_index")], join_args.clone()).collect().expect("Could not join");
+    main_df = main_df
+        .clone()
+        .lazy()
+        .join(disease_features_df.clone(), [col("node_index")], [col("node_index")], join_args.clone())
+        .collect()
+        .expect("Could not join");
     main_df = rusty_matrix_io::coalesce_columns(main_df, vec!["node_index"]);
     debug!("column names: {:?}", main_df.get_column_names_str());
     debug!("adding disease features: {:?}", main_df.head(None));
@@ -102,16 +117,66 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .otherwise(col("node_source"))
                 .alias("node_source"),
         )
-        .with_column(when(col("node_type").str().contains_literal(lit("exposure"))).then(lit("biolink:ChemicalExposure")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("effect/phenotype"))).then(lit("biolink:PhenotypicFeature")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("molecular_function"))).then(lit("biolink:MolecularActivity")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("cellular_component"))).then(lit("biolink:CellularComponent")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("biological_process"))).then(lit("biolink:BiologicalProcess")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("pathway"))).then(lit("biolink:Pathway")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("gene/protein"))).then(lit("biolink:Gene")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("disease"))).then(lit("biolink:Disease")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("drug"))).then(lit("biolink:SmallMolecule")).otherwise(col("node_type")).alias("node_type"))
-        .with_column(when(col("node_type").str().contains_literal(lit("anatomy"))).then(lit("biolink:GrossAnatomicalStructure")).otherwise(col("node_type")).alias("node_type"))
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("exposure")))
+                .then(lit("biolink:ChemicalExposure"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("effect/phenotype")))
+                .then(lit("biolink:PhenotypicFeature"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("molecular_function")))
+                .then(lit("biolink:MolecularActivity"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("cellular_component")))
+                .then(lit("biolink:CellularComponent"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("biological_process")))
+                .then(lit("biolink:BiologicalProcess"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("pathway")))
+                .then(lit("biolink:Pathway"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("gene/protein")))
+                .then(lit("biolink:Gene"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("disease")))
+                .then(lit("biolink:Disease"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("drug")))
+                .then(lit("biolink:SmallMolecule"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
+        .with_column(
+            when(col("node_type").str().contains_literal(lit("anatomy")))
+                .then(lit("biolink:GrossAnatomicalStructure"))
+                .otherwise(col("node_type"))
+                .alias("node_type"),
+        )
         .drop(["node_id", "node_index"])
         .rename(["node_source", "node_name", "category"], ["id", "name", "drug_category"], true)
         .rename(["node_type"], ["category"], true)

@@ -2,8 +2,8 @@ use clap::Parser;
 use humantime::format_duration;
 use log::{debug, info};
 use polars::prelude::*;
-use rand::distr::Uniform;
 use rand::Rng;
+use rand::distr::Uniform;
 use std::fs;
 use std::time::Instant;
 use std::{error, path};
@@ -46,7 +46,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .unwrap();
 
     let edge_ids_df = concat(
-        [edge_id_columns_df.clone().lazy().select([col("subject").alias("id")]), edge_id_columns_df.clone().lazy().select([col("object").alias("id")])],
+        [
+            edge_id_columns_df.clone().lazy().select([col("subject").alias("id")]),
+            edge_id_columns_df.clone().lazy().select([col("object").alias("id")]),
+        ],
         UnionArgs::default(),
     )
     .unwrap()
@@ -74,7 +77,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .with_ignore_errors(true)
         .finish()
         .unwrap()
-        .filter(col("subject").str().contains_any(lit(selected_ids_series.clone()), false).or(col("object").str().contains_any(lit(selected_ids_series.clone()), false)))
+        .filter(
+            col("subject")
+                .str()
+                .contains_any(lit(selected_ids_series.clone()), false)
+                .or(col("object").str().contains_any(lit(selected_ids_series.clone()), false)),
+        )
         .collect()
         .unwrap();
 
@@ -85,11 +93,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut output_edges_file = fs::File::create(format!("{}/{}", options.output_dir.to_string_lossy(), edges_file_name)).unwrap();
     CsvWriter::new(&mut output_edges_file).with_separator(b'\t').finish(&mut edges_df).unwrap();
 
-    let selected_edge_ids_df =
-        concat([edges_df.clone().lazy().select([col("subject").alias("id")]), edges_df.clone().lazy().select([col("object").alias("id")])], UnionArgs::default())
-            .unwrap()
-            .collect()
-            .unwrap();
+    let selected_edge_ids_df = concat(
+        [
+            edges_df.clone().lazy().select([col("subject").alias("id")]),
+            edges_df.clone().lazy().select([col("object").alias("id")]),
+        ],
+        UnionArgs::default(),
+    )
+    .unwrap()
+    .collect()
+    .unwrap();
     let selected_edge_ids = selected_edge_ids_df.column("id").unwrap().as_series().unwrap().clone();
 
     let mut nodes_df = LazyCsvReader::new(options.nodes.clone())
@@ -117,8 +130,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod test {
     use polars::prelude::*;
-    use rand::distr::Uniform;
     use rand::Rng;
+    use rand::distr::Uniform;
 
     #[test]
     fn test_random_edges() {

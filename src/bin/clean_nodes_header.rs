@@ -22,8 +22,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let options = Options::parse();
     debug!("{:?}", options);
 
-    let primary_columns =
-        vec!["id", "category", "original_id", "all_categories", "name", "description", "equivalent_identifiers", "publications", "labels", "international_resource_identifier"];
+    let primary_columns = vec![
+        "id",
+        "category",
+        "original_id",
+        "all_categories",
+        "name",
+        "description",
+        "equivalent_identifiers",
+        "publications",
+        "labels",
+        "international_resource_identifier",
+    ];
 
     let tmp_df = LazyCsvReader::new(options.input.clone())
         .with_separator(b'\t')
