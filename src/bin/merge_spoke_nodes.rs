@@ -23,8 +23,7 @@ use std::path;
 use std::path::PathBuf;
 use std::time::Instant;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 
