@@ -1,24 +1,28 @@
+#[macro_use]
+extern crate log;
+
 use async_once::AsyncOnce;
+use clap::{Parser, Subcommand};
 use humantime::format_duration;
 use in_place::InPlace;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, info};
+use polars::prelude::*;
 use rayon::prelude::*;
 use reqwest::header;
 use reqwest::redirect::Policy;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
-use std::error;
+use std::ffi::OsStr;
 use std::fs;
-use std::io;
-use std::io::BufWriter;
 use std::io::prelude::*;
+use std::io::{BufRead, BufWriter};
 use std::path;
-use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
+use std::{error, io};
 
 lazy_static! {
     pub static ref REQWEST_CLIENT: AsyncOnce<reqwest::Client> = AsyncOnce::new(async {
@@ -76,15 +80,272 @@ pub struct NNResponseEquivalentIdentifiers {
     pub label: Option<String>,
 }
 
+#[derive(Parser, PartialEq, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Options {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, PartialEq, Debug)]
+enum Commands {
+    Clean {
+        #[clap(short = 'p', long, required = true)]
+        base_path: path::PathBuf,
+    },
+    MergeEdges {
+        #[clap(short = 'n', long, required = true)]
+        nodes: path::PathBuf,
+
+        #[clap(short = 'e', long, required = true)]
+        edges: path::PathBuf,
+    },
+    MergeNodes {
+        #[arg(short = 'n', long, required = true)]
+        nodes: path::PathBuf,
+
+        #[arg(short = 'e', long, required = true)]
+        edges: path::PathBuf,
+
+        #[arg(short, long, default_value_t = 10)]
+        limit: i32,
+
+        #[arg(short = 'o', long, required = true)]
+        output: path::PathBuf,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn error::Error>> {
     let start = Instant::now();
     env_logger::init();
 
+    let options = Options::parse();
+    debug!("{:?}", options);
+
+    match &options.command {
+        Some(Commands::MergeEdges { nodes, edges }) => {
+            merge_edges(nodes, edges).expect("Could not merge edges");
+        }
+        Some(Commands::MergeNodes { nodes, edges, limit, output }) => {
+            merge_nodes(nodes, edges, limit, output).expect("Could not merge nodes");
+        }
+        Some(Commands::Clean { base_path }) => {
+            clean_spoke_data(base_path).await.expect("Could not clean data");
+        }
+        None => {}
+    }
+
+    info!("Duration: {}", format_duration(start.elapsed()).to_string());
+    Ok(())
+}
+
+fn merge_nodes(nodes: &path::PathBuf, edges: &path::PathBuf, limit: &i32, output: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
+    let base_path = path::PathBuf::from("/home/jdr0887/data/matrix/KGs/spoke/V5");
+    // let nodes_path = base_path.join("nodes");
+
+    // let first_output_path = base_path.join("first_merged_nodes.tsv");
+    // let second_output_path = base_path.join("second_merged_nodes.tsv");
+    // let third_output_path = base_path.join("third_merged_nodes.tsv");
+    // let fourth_output_path = base_path.join("fourth_merged_nodes.tsv");
+    // let fifth_output_path = base_path.join("fifth_merged_nodes.tsv");
+
+    // let first_node_file_names = vec![
+    //     "node_0_new.tsv",
+    //     "node_1_new.tsv",
+    //     "node_3_new.tsv",
+    //     "node_4_new.tsv",
+    //     "node_6_new.tsv",
+    //     "node_9_new.tsv",
+    //     "node_10_new.tsv",
+    //     "node_11_new.tsv",
+    //     "node_12_new.tsv", // doesn't have name...maybe use reference instead???
+    //     "node_13_new.tsv", // doesn't have name...maybe use accession instead???
+    //     "node_14_new.tsv",
+    //     "node_15_new.tsv",
+    //     "node_19_new.tsv",
+    //     "node_20_new.tsv",
+    //     "node_21_new.tsv",
+    //     "node_25_new.tsv", // doesn't have name...maybe use Allele_ID instead???
+    // ]
+    // .into_iter()
+    // .map(|a| base_path.join(a))
+    // .collect_vec();
+    //
+    // merge_nodes_files(&first_output_path, first_node_file_names);
+    //
+    // let second_node_file_names = vec![
+    //     "node_18_new_00.tsv",
+    //     "node_18_new_01.tsv",
+    //     "node_18_new_02.tsv",
+    //     "node_18_new_03.tsv",
+    //     "node_18_new_04.tsv",
+    //     "node_18_new_05.tsv",
+    //     "node_18_new_06.tsv",
+    //     "node_18_new_07.tsv",
+    //     "node_18_new_08.tsv",
+    //     "node_18_new_09.tsv",
+    // ]
+    // .into_iter()
+    // .map(|a| base_path.join(a))
+    // .collect_vec();
+    //
+    // merge_nodes_files(&second_output_path, second_node_file_names);
+    //
+    // let third_node_file_names = vec![
+    //     "node_18_new_10.tsv",
+    //     "node_18_new_11.tsv",
+    //     "node_18_new_12.tsv",
+    //     "node_18_new_13.tsv",
+    //     "node_18_new_14.tsv",
+    //     "node_18_new_15.tsv",
+    //     "node_18_new_16.tsv",
+    //     "node_18_new_17.tsv",
+    //     "node_18_new_18.tsv",
+    //     "node_18_new_19.tsv",
+    // ]
+    // .into_iter()
+    // .map(|a| base_path.join(a))
+    // .collect_vec();
+    //
+    // merge_nodes_files(&third_output_path, third_node_file_names);
+    //
+    // let fourth_node_file_names = vec![
+    //     "node_18_new_20.tsv",
+    //     "node_18_new_21.tsv",
+    //     "node_18_new_22.tsv",
+    //     "node_18_new_23.tsv",
+    //     "node_18_new_24.tsv",
+    //     "node_18_new_25.tsv",
+    //     "node_18_new_26.tsv",
+    //     "node_18_new_27.tsv",
+    //     "node_18_new_28.tsv",
+    //     "node_18_new_29.tsv",
+    // ]
+    // .into_iter()
+    // .map(|a| base_path.join(a))
+    // .collect_vec();
+    //
+    // merge_nodes_files(&fourth_output_path, fourth_node_file_names);
+    //
+    // let fifth_node_file_names = vec![
+    //     "node_18_new_30.tsv",
+    //     "node_18_new_31.tsv",
+    //     "node_18_new_32.tsv",
+    //     "node_18_new_33.tsv",
+    //     "node_18_new_34.tsv",
+    //     "node_18_new_35.tsv",
+    //     "node_18_new_36.tsv",
+    //     "node_18_new_37.tsv",
+    //     "node_18_new_38.tsv",
+    // ]
+    // .into_iter()
+    // .map(|a| base_path.join(a))
+    // .collect_vec();
+    //
+    // merge_files(JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns), &fifth_output_path, fifth_node_file_names);
+
+    // let part_1 = base_path.join("merged_nodes_1_2.tsv");
+    // merge_files(&part_1, vec![first_output_path.clone(), second_output_path]);
+    //
+    // let part_2 = base_path.join("merged_nodes_1_3.tsv");
+    // merge_files(&part_2, vec![first_output_path.clone(), third_output_path]);
+    //
+    // let part_3 = base_path.join("merged_nodes_1_4.tsv");
+    // merge_files(&part_3, vec![first_output_path.clone(), fourth_output_path]);
+    //
+    // let part_4 = base_path.join("merged_nodes_1_5.tsv");
+    // merge_files(&part_4, vec![first_output_path.clone(), fifth_output_path]);
+
+    // let part_one_df = LazyCsvReader::new(part_1.clone())
+    //     .with_separator(b'\t')
+    //     .with_truncate_ragged_lines(true)
+    //     .with_has_header(true)
+    //     .with_ignore_errors(true)
+    //     .finish()
+    //     .unwrap()
+    //     .with_columns([
+    //         col("vestige").strict_cast(DataType::String),
+    //         col("org_ncbi_id").strict_cast(DataType::String),
+    //         col("start").strict_cast(DataType::String),
+    //         col("end").strict_cast(DataType::String),
+    //     ])
+    //     .collect()
+    //     .unwrap();
+    //
+    // println!("column names: {:?}", part_one_df.get_column_names());
+    // println!("column types: {:?}", part_one_df.dtypes());
+    //
+    // let part_two_df = LazyCsvReader::new(part_2.clone())
+    //     .with_separator(b'\t')
+    //     .with_truncate_ragged_lines(true)
+    //     .with_has_header(true)
+    //     .with_ignore_errors(true)
+    //     .finish()
+    //     .unwrap()
+    //     .with_columns([
+    //         col("vestige").strict_cast(DataType::String),
+    //         col("org_ncbi_id").strict_cast(DataType::String),
+    //         col("start").strict_cast(DataType::String),
+    //         col("end").strict_cast(DataType::String),
+    //     ])
+    //     .collect()
+    //     .unwrap();
+    //
+    // println!("column names: {:?}", part_two_df.get_column_names());
+    // println!("column types: {:?}", part_two_df.dtypes());
+    //
+    // let part_three_df = LazyCsvReader::new(part_3.clone())
+    //     .with_separator(b'\t')
+    //     .with_truncate_ragged_lines(true)
+    //     .with_has_header(true)
+    //     .with_ignore_errors(true)
+    //     .finish()
+    //     .unwrap()
+    //     .with_columns([
+    //         col("vestige").strict_cast(DataType::String),
+    //         col("org_ncbi_id").strict_cast(DataType::String),
+    //         col("start").strict_cast(DataType::String),
+    //         col("end").strict_cast(DataType::String),
+    //     ])
+    //     .collect()
+    //     .unwrap();
+    //
+    // println!("column names: {:?}", part_three_df.get_column_names());
+    // println!("column types: {:?}", part_three_df.dtypes());
+    //
+    // let mut df_vertical_concat = concat([part_one_df.clone().lazy(), part_two_df.clone().lazy(), part_three_df.clone().lazy()], UnionArgs::default())
+    //     .unwrap()
+    //     .unique(Some(vec!["id".parse().unwrap(), "category".parse().unwrap()]), UniqueKeepStrategy::First)
+    //     .collect()
+    //     .unwrap();
+    //
+
+    let final_output = base_path.join("merged_nodes.tsv");
+    let final_df = LazyCsvReader::new(final_output.clone())
+        .with_separator(b'\t')
+        .with_truncate_ragged_lines(true)
+        .with_has_header(true)
+        .with_ignore_errors(true)
+        .finish()
+        .unwrap()
+        // .unique(Some(vec!["id".parse().unwrap(), "category".parse().unwrap()]), UniqueKeepStrategy::First)
+        .collect()
+        .unwrap();
+
+    println!("final_df.shape(): {:?}", final_df.shape());
+
+    // let final_output_distinct = base_path.join("merged_nodes_distinct.tsv");
+    // let mut file = fs::File::create(final_output_distinct.as_path()).unwrap();
+    // CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut final_df).unwrap();
+
+    Ok(())
+}
+
+async fn clean_spoke_data(base_path: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
     let category_ancestor_mapping = create_category_mapping().await;
     debug!("{:?}", category_ancestor_mapping);
 
-    let base_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/data/01_RAW/KGs/spoke/V5");
     let nodes_path = base_path.join("nodes");
     let edges_path = base_path.join("edges");
 
@@ -250,7 +511,6 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
         // break;
     }
-    info!("Duration: {}", format_duration(start.elapsed()).to_string());
     Ok(())
 }
 
@@ -312,7 +572,7 @@ fn read_edges_file(edges_file_path: &path::PathBuf) -> Vec<Edge> {
     edges
 }
 
-fn read_predicate_info(predicate_info_path: &PathBuf) -> BTreeMap<(String, String, String), String> {
+fn read_predicate_info(predicate_info_path: &path::PathBuf) -> BTreeMap<(String, String, String), String> {
     let predicate_info_contents = fs::read_to_string(predicate_info_path).unwrap();
     predicate_info_contents
         .lines()
@@ -418,22 +678,253 @@ async fn create_category_mapping() -> BTreeMap<String, String> {
     ret
 }
 
+fn merge_nodes_files(output_path: &path::PathBuf, node_file_names: Vec<path::PathBuf>) {
+    let join_args = JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns);
+    let mut main_df = df!(
+        "id" => &Vec::<String>::new(),
+                   "name" => &Vec::<String>::new(),
+                   "category" => &Vec::<String>::new(),
+    )
+    .unwrap();
+
+    for node_file_path in node_file_names.into_iter() {
+        info!("node_file_path: {:?}", node_file_path);
+
+        let df = LazyCsvReader::new(node_file_path.clone())
+            .with_separator(b'\t')
+            .with_truncate_ragged_lines(true)
+            .with_has_header(true)
+            .with_ignore_errors(true)
+            .finish()
+            .unwrap();
+
+        main_df = main_df
+            .clone()
+            .lazy()
+            .join(df.clone(), [col("id"), col("category")], [col("id"), col("category")], join_args.clone())
+            .collect()
+            .expect("Could not join");
+
+        let columns = vec![
+            "name",
+            "source",
+            "description",
+            "license",
+            "url",
+            "synonyms",
+            "vestige",
+            "sources",
+            "accession",
+            "chembl_id",
+            "org_name",
+            "reviewed",
+            "EC",
+            "org_ncbi_id",
+            "gene",
+            "start",
+            "end",
+            "polyprotein",
+            "isoform",
+        ];
+        main_df = rusty_matrix_io::coalesce_columns(main_df, columns);
+
+        println!("column names: {:?}", main_df.get_column_names());
+    }
+
+    let mut file = fs::File::create(output_path.as_path()).unwrap();
+    CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut main_df).unwrap();
+}
+
+fn merge_edges(nodes: &path::PathBuf, edges: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
+    let base_path = path::PathBuf::from("/home/jdr0887/data/matrix/KGs/spoke/V5");
+    let edges_path = base_path.join("edges");
+
+    let edge_files_to_use = vec![
+        "edge_4.tsv",
+        "edge_6.tsv",
+        "edge_7.tsv",
+        "edge_8.tsv",
+        "edge_21.tsv",
+        "edge_24.tsv",
+        "edge_27.tsv",
+        "edge_33.tsv",
+        "edge_36.tsv",
+        "edge_39.tsv",
+        "edge_47.tsv",
+        "edge_49.tsv",
+        "edge_50.tsv",
+        "edge_53.tsv",
+        "edge_56.tsv",
+        "edge_59.tsv",
+        "edge_61.tsv",
+        "edge_62.tsv",
+        "edge_63.tsv",
+        "edge_69.tsv",
+        "edge_72.tsv",
+        "edge_73.tsv",
+        "edge_75.tsv",
+        "edge_84.tsv",
+        "edge_85.tsv",
+        "edge_88.tsv",
+    ];
+
+    let usable_edge_paths = edge_files_to_use.into_iter().map(|a| edges_path.join(a)).collect_vec();
+
+    let output = base_path.join("merged_edges.tsv");
+    merge_edges_files(&output, usable_edge_paths);
+    Ok(())
+}
+
+fn merge_edges_files(output_path: &path::PathBuf, edge_file_names: Vec<path::PathBuf>) {
+    let join_args = JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns);
+    let mut main_df = df!(
+        "subject" => &Vec::<String>::new(),
+                   "predicate" => &Vec::<String>::new(),
+                   "object" => &Vec::<String>::new(),
+    )
+    .unwrap();
+
+    for edge_file_path in edge_file_names.into_iter() {
+        info!("edge_file_path: {:?}", edge_file_path);
+
+        let df = LazyCsvReader::new(edge_file_path.clone())
+            .with_separator(b'\t')
+            .with_truncate_ragged_lines(true)
+            .with_has_header(true)
+            .with_ignore_errors(true)
+            .finish()
+            .unwrap();
+
+        main_df = main_df
+            .clone()
+            .lazy()
+            .join(
+                df.clone(),
+                [col("subject"), col("predicate"), col("object")],
+                [col("subject"), col("predicate"), col("object")],
+                join_args.clone(),
+            )
+            .collect()
+            .expect("Could not join");
+
+        let columns = vec![
+            "source",
+            "sources",
+            "unbiased",
+            "evidence",
+            "vestige",
+            "version",
+            "p_value",
+            "direction",
+            "alternative_allele",
+            "reference_allele",
+        ];
+        main_df = rusty_matrix_io::coalesce_columns(main_df, columns);
+
+        println!("column names: {:?}", main_df.get_column_names());
+    }
+
+    let mut file = fs::File::create(output_path.as_path()).unwrap();
+    CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut main_df).unwrap();
+}
+
+// fn main() {
+//     let nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes");
+//     let mut node_files = fs::read_dir(nodes_path)
+//         .unwrap()
+//         .map(|res| res.map(|e| e.path()))
+//         .filter_map(Result::ok)
+//         .filter(|p| p.file_name().and_then(OsStr::to_str).is_some_and(|n| n.starts_with("node_")))
+//         .collect_vec();
+//
+//     node_files.sort();
+//     println!("{:?}", node_files);
+//
+//     let mut main_df = df!(
+//         "identifier" => &Vec::<String>::new(),
+//                    "name" => &Vec::<String>::new(),
+//                    "category" => &Vec::<String>::new(),
+//     )
+//         .unwrap();
+//
+//     let parse_options = CsvParseOptions::default().with_separator(b'\t');
+//
+//     let join_args = JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns);
+//
+//     let first_nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes/node_0.tsv");
+//     let first_df = CsvReadOptions::default()
+//         .with_parse_options(parse_options.clone())
+//         .with_has_header(true)
+//         .with_ignore_errors(true)
+//         .try_into_reader_with_file_path(Some(first_nodes_path.clone()))
+//         .unwrap()
+//         .finish()
+//         .unwrap();
+//
+//     let second_nodes_path = path::PathBuf::from("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes/node_1.tsv");
+//     let second_df = CsvReadOptions::default()
+//         .with_parse_options(parse_options.clone())
+//         .with_has_header(true)
+//         .with_ignore_errors(true)
+//         .try_into_reader_with_file_path(Some(second_nodes_path.clone()))
+//         .unwrap()
+//         .finish()
+//         .unwrap();
+//
+//     main_df = main_df
+//         .join(
+//             &first_df,
+//             ["identifier", "name", "category"],
+//             ["identifier", "name", "category"],
+//             join_args.clone(),
+//             None,
+//         )
+//         .expect("Could not join");
+//     let mut asdf = main_df.select(["id", "identifier"]).unwrap();
+//
+//     println!("id & identifier columsn: {:?}", asdf);
+//     // main_df = main_df.join(&second_df, ["identifier", "name", "category"], ["identifier", "name", "category"], join_args.clone()).expect("Could not join");
+//     let mut file = fs::File::create("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/id_identifier_map.json").unwrap();
+//     JsonWriter::new(&mut file).with_json_format(JsonFormat::JsonLines).finish(&mut asdf).unwrap();
+//
+//     // let mut file = fs::File::create("/media/jdr0887/backup/home/jdr0887/matrix/KGs/spoke/V5/nodes_merged.csv").unwrap();
+//     // CsvWriter::new(&mut file).with_separator(b'\t').finish(&mut main_df).unwrap();
+//
+//     // for node_file in node_files.iter() {
+//     //     let mut df = CsvReadOptions::default()
+//     //         .with_parse_options(parse_options.clone())
+//     //         .with_has_header(true)
+//     //         .with_ignore_errors(true)
+//     //         .try_into_reader_with_file_path(Some(node_file.clone()))
+//     //         .unwrap()
+//     //         .finish()
+//     //         .unwrap();
+//     //
+//     //     let join_args = JoinArgs::new(JoinType::Full).with_coalesce(JoinCoalesce::CoalesceColumns);
+//     //     main_df = main_df.join(&df, ["identifier", "name"], ["identifier", "name"], join_args).expect("Could not join");
+//     //
+//     //     // df.join(&main_df, vec!["identifier", "name"], vec!["identifier", "name"], JoinArgs::new(JoinType::Left)).expect("Could not join");
+//     //
+//     //     println!("file: {:?} has column names: {:?}", node_file, df.get_column_names());
+//     //     break;
+//     // }
+//
+//     println!("main dataframe column names: {:?}", main_df.get_column_names());
+// }
+
 #[cfg(test)]
 mod test {
-
-    use crate::{NNResponse, Node};
     use in_place::InPlace;
     use itertools::Itertools;
     use polars::prelude::*;
     use serde_json::json;
     use std::collections::HashMap;
-    use std::io::BufWriter;
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{BufRead, BufReader, BufWriter, Write};
     use std::{fs, io, path};
 
     #[test]
     fn scratch() {
-        let response: HashMap<String, Option<NNResponse>> = serde_json::from_value(
+        let response: HashMap<String, Option<crate::NNResponse>> = serde_json::from_value(
             json!(
                 {
                     "UBERON:0003233":{"id":{"identifier":"UBERON:0003233","label":"epithelium of shoulder"},"equivalent_identifiers":[{"identifier":"UBERON:0003233","label":"epithelium of shoulder"}],"type":["biolink:GrossAnatomicalStructure","biolink:AnatomicalEntity","biolink:PhysicalEssence","biolink:OrganismalEntity","biolink:SubjectOfInvestigation","biolink:BiologicalEntity","biolink:ThingWithTaxon","biolink:NamedThing","biolink:PhysicalEssenceOrOccurrent"],"information_content":100.0},
@@ -459,14 +950,14 @@ mod test {
         let nodes_file = std::fs::File::open(nodes_file_path).unwrap();
 
         let reader = io::BufReader::new(nodes_file);
-        let mut nodes: Vec<Node> = reader
+        let mut nodes: Vec<crate::Node> = reader
             .lines()
             .skip(1)
             .map(|line| {
                 let line = line.unwrap();
                 let split = line.split('\t').collect_vec();
                 let (left, right) = split.split_at(3);
-                Node {
+                crate::Node {
                     id: left[0].to_string(),
                     category: left[1].to_string(),
                     identifier: left[2].to_string(),
@@ -488,7 +979,7 @@ mod test {
         let inp = InPlace::new(edge_file_path.as_path()).open().unwrap();
         let reader = io::BufReader::new(inp.reader());
         let mut writer = inp.writer();
-        let chunk = vec![Node {
+        let chunk = vec![crate::Node {
             id: "5306".to_string(),
             category: "Anatomy".to_string(),
             identifier: "UBERON:0000000".to_string(),

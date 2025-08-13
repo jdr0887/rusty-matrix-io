@@ -7,6 +7,19 @@ use serde_derive::{Deserialize, Serialize};
 use std::{fs, io, path};
 
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Ord, PartialOrd)]
+pub struct KGSchemaSnapshot {
+    pub nodes: Vec<Column>,
+    pub edges: Vec<Column>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Ord, PartialOrd)]
+pub struct Column {
+    pub name: String,
+    pub datatype: String,
+    pub samples: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Ord, PartialOrd)]
 pub struct Node {
     pub id: String,
     pub category: String,
@@ -27,7 +40,12 @@ pub fn coalesce_columns(mut df: DataFrame, cols: Vec<&str>) -> DataFrame {
     for col in cols.into_iter() {
         let col_right = format!("{}_right", col);
         if df.get_column_names_str().contains(&col_right.as_str()) {
-            df = df.clone().lazy().with_column(coalesce(&[col.into(), col_right.as_str().into()]).alias(col)).collect().unwrap();
+            df = df
+                .clone()
+                .lazy()
+                .with_column(coalesce(&[col.into(), col_right.as_str().into()]).alias(col))
+                .collect()
+                .unwrap();
             df.drop_in_place(col_right.as_str()).expect("Unable to remove column");
         }
     }
