@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let edges_ids: BTreeSet<String> = edges_id_series.str().unwrap().into_iter().filter_map(|a| a.map(String::from)).collect();
 
-    let mut nodes_df = LazyCsvReader::new(options.nodes.clone())
+    let nodes_df = LazyCsvReader::new(options.nodes.clone())
         .with_separator(b'\t')
         .with_truncate_ragged_lines(true)
         .with_has_header(true)

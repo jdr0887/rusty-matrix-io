@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use humantime::format_duration;
-use log::{debug, info, warn};
+use log::{debug, info};
 use polars::prelude::*;
 use std::path::PathBuf;
 use std::time::Instant;
