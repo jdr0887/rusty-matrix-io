@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use humantime::format_duration;
 use log::{debug, info};
-use polars::prelude::AnyValue::Null;
 use polars::prelude::*;
+use std::io::Cursor;
 use std::time::Instant;
 use std::{error, fs, path};
 
@@ -35,6 +35,10 @@ enum Commands {
         #[arg(short = 'o', long, required = true)]
         output: path::PathBuf,
     },
+    PrintPredicateMappings {
+        #[arg(short = 'i', long, required = true)]
+        kg: path::PathBuf,
+    },
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -56,10 +60,102 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }) => {
             build_nodes(drug_features, disease_features, nodes, output).expect("Could not build nodes");
         }
+        Some(Commands::PrintPredicateMappings { kg }) => {
+            print_predicate_mappings(kg).expect("Could not print predicate mappings");
+        }
         None => {}
     }
 
     info!("Duration: {}", format_duration(start.elapsed()).to_string());
+    Ok(())
+}
+
+fn print_predicate_mappings(kg: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
+    let mut edges_df = LazyCsvReader::new(kg)
+        .with_infer_schema_length(Some(0))
+        .with_ignore_errors(true)
+        .with_truncate_ragged_lines(true)
+        .with_has_header(true)
+        .finish()
+        .unwrap()
+        .with_column(lit(LiteralValue::untyped_null()).cast(DataType::String).alias("predicate"))
+        .with_column(
+            when(col("relation").str().contains(
+                lit("^(bioprocess_protein|cellcomp_protein|exposure_bioprocess|exposure_cellcomp|exposure_molfunc|exposure_protein|molfunc_protein|pathway_protein)$"),
+                true,
+            ))
+                .then(lit("biolink:interacts_with"))
+                .otherwise(col("predicate"))
+                .alias("predicate"),
+        )
+        .with_column(
+            when(col("relation").str().contains(lit("^(disease_protein|phenotype_protein)$"), true))
+                .then(lit("biolink:associated_with"))
+                .otherwise(col("predicate"))
+                .alias("predicate"),
+        )
+        .with_column(
+            when(col("relation").str().contains(
+                lit("^(anatomy_anatomy|bioprocess_bioprocess|cellcomp_cellcomp|disease_disease|exposure_exposure|molfunc_molfunc|pathway_pathway|phenotype_phenotype)$"),
+                true,
+            ))
+                .then(lit("biolink:superclass_of"))
+                .otherwise(col("predicate"))
+                .alias("predicate"),
+        )
+        .with_column(
+            when(col("relation").eq(lit("protein_protein"))).then(lit("biolink:interacts_with")).otherwise(col("predicate")).alias("predicate"),
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_effect"))).then(lit("biolink:has_side_effect")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("contraindication"))).then(lit("biolink:contraindicated_in")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(when(col("relation").eq(lit("anatomy_protein_absent"))).then(lit("true")).otherwise(lit(LiteralValue::untyped_null())).alias("negated"))
+        .with_column(when(col("relation").eq(lit("anatomy_protein_absent"))).then(lit("biolink:expressed_in")).otherwise(col("predicate")).alias("predicate"))
+        .with_column(when(col("relation").eq(lit("anatomy_protein_present"))).then(lit("biolink:expressed_in")).otherwise(col("predicate")).alias("predicate"))
+        .with_column(when(col("relation").eq(lit("disease_phenotype_negative"))).then(lit("true")).otherwise(lit(LiteralValue::untyped_null())).alias("negated"))
+        .with_column(when(col("relation").eq(lit("disease_phenotype_negative"))).then(lit("biolink:has_phenotype")).otherwise(col("predicate")).alias("predicate"))
+        .with_column(when(col("relation").eq(lit("disease_phenotype_positive"))).then(lit("biolink:has_phenotype")).otherwise(col("predicate")).alias("predicate"))
+        .with_column(when(col("relation").eq(lit("exposure_disease"))).then(lit("biolink:correlated_with")).otherwise(col("predicate")).alias("predicate"))
+        .with_column(
+            when(col("relation").eq(lit("indication"))).then(lit("biolink:treats")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("off-label use"))).then(lit("biolink:applied_to_treat")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_drug"))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("enzyme")))).then(lit("amount")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier")
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("enzyme")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("target")))).then(lit("biolink:directly_physically_interacts_with")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(
+            when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("carrier")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        )
+        .with_column(when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("transport")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_aspect_qualifier"))
+        .with_column(when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("increased")).otherwise(lit(LiteralValue::untyped_null())).alias("subject_direction_qualifier"))
+        .with_column(
+            when(col("relation").eq(lit("drug_protein")).and(col("display_relation").eq(lit("transporter")))).then(lit("biolink:affected_by")).otherwise(col("predicate")).alias("predicate")
+        ).unique(Some(vec!["relation".into(), "display_relation".into(), "predicate".into()]), UniqueKeepStrategy::First)
+        .select([col("relation"), col("display_relation"), col("predicate")])
+        .collect()
+        .unwrap();
+
+    let mut buf = Cursor::new(Vec::new());
+    JsonWriter::new(&mut buf).with_json_format(JsonFormat::Json).finish(&mut edges_df).unwrap();
+    let json_string = String::from_utf8(buf.into_inner()).unwrap();
+    let parsed_json: serde_json::Value = serde_json::from_str(&json_string).unwrap();
+    let pretty_json = serde_json::to_string_pretty(&parsed_json).unwrap();
+    println!("{}", pretty_json);
+
     Ok(())
 }
 
