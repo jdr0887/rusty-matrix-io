@@ -97,8 +97,11 @@ enum Commands {
         #[arg(short, long, required = true)]
         schema_snapshot: path::PathBuf,
 
-        #[arg(short, long, default_value_t = 10)]
+        #[arg(short, long, default_value_t = 20)]
         limit: i32,
+
+        #[arg(short, long, default_value_t = 100)]
+        rows: i32,
 
         #[arg(short = 'o', long, required = true)]
         output: path::PathBuf,
@@ -110,8 +113,11 @@ enum Commands {
         #[arg(short = 'e', long, required = true)]
         edges: path::PathBuf,
 
-        #[arg(short, long, default_value_t = 10)]
+        #[arg(short, long, default_value_t = 20)]
         limit: i32,
+
+        #[arg(short, long, default_value_t = 100)]
+        rows: i32,
 
         #[arg(short = 'o', long, required = true)]
         output: path::PathBuf,
@@ -139,12 +145,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             edges,
             schema_snapshot,
             limit,
+            rows,
             output,
         }) => {
-            build_yaml_from_kg_schema_snapshot(nodes, edges, schema_snapshot, limit, output).expect("Could not build fabricator yaml from KG schema snapshot");
+            build_yaml_from_kg_schema_snapshot(nodes, edges, schema_snapshot, limit, rows, output)
+                .expect("Could not build fabricator yaml from KG schema snapshot");
         }
-        Some(Commands::BuildYAMLFromKGX { nodes, edges, limit, output }) => {
-            build_yaml_from_kgx(nodes, edges, limit, output).expect("Could not build fabricator yaml from KGX");
+        Some(Commands::BuildYAMLFromKGX {
+            nodes,
+            edges,
+            limit,
+            rows,
+            output,
+        }) => {
+            build_yaml_from_kgx(nodes, edges, limit, rows, output).expect("Could not build fabricator yaml from KGX");
         }
         None => {}
     }
@@ -158,6 +172,7 @@ fn build_yaml_from_kg_schema_snapshot(
     edges: &path::PathBuf,
     schema_snapshot: &path::PathBuf,
     limit: &i32,
+    rows: &i32,
     output: &path::PathBuf,
 ) -> Result<(), Box<dyn error::Error>> {
     let schema_snapshot_content = fs::read_to_string(schema_snapshot).expect("Could not read schema snapshot");
@@ -219,8 +234,8 @@ fn build_yaml_from_kg_schema_snapshot(
     debug!("nodes_df.shape(): {:?}", nodes_df.shape());
 
     let mut map = IndexMap::new();
-    map.insert("nodes".to_string(), create_nodes_map(&nodes_df, size).expect("Could not create nodes map"));
-    map.insert("edges".to_string(), create_edges_map(&edges_df, size).expect("Could not create edges map"));
+    map.insert("nodes".to_string(), create_nodes_map(&nodes_df, rows).expect("Could not create nodes map"));
+    map.insert("edges".to_string(), create_edges_map(&edges_df, rows).expect("Could not create edges map"));
 
     let yaml = serde_yml::to_string(&map).unwrap();
     let output_file = fs::File::create(output).expect("Could not create output file");
@@ -229,7 +244,7 @@ fn build_yaml_from_kg_schema_snapshot(
     Ok(())
 }
 
-fn build_yaml_from_kgx(nodes: &path::PathBuf, edges: &path::PathBuf, limit: &i32, output: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
+fn build_yaml_from_kgx(nodes: &path::PathBuf, edges: &path::PathBuf, limit: &i32, rows: &i32, output: &path::PathBuf) -> Result<(), Box<dyn error::Error>> {
     let size: f32 = *limit as f32 / 2.0;
     let size: IdxSize = size.round() as IdxSize;
 
@@ -277,8 +292,8 @@ fn build_yaml_from_kgx(nodes: &path::PathBuf, edges: &path::PathBuf, limit: &i32
 
     let mut map = IndexMap::new();
 
-    map.insert("nodes".to_string(), create_nodes_map(&nodes_df, size).expect("Could not create nodes map"));
-    map.insert("edges".to_string(), create_edges_map(&edges_df, size).expect("Could not create edges map"));
+    map.insert("nodes".to_string(), create_nodes_map(&nodes_df, rows).expect("Could not create nodes map"));
+    map.insert("edges".to_string(), create_edges_map(&edges_df, rows).expect("Could not create edges map"));
 
     let yaml = serde_yml::to_string(&map).unwrap();
     let output_file = fs::File::create(output).expect("Could not create output file");
@@ -388,7 +403,7 @@ fn create_kg_schema_snapshot(
     Ok(())
 }
 
-fn create_nodes_map(df: &DataFrame, size: IdxSize) -> Result<IndexMap<String, Value>, Box<dyn error::Error>> {
+fn create_nodes_map(df: &DataFrame, rows: &i32) -> Result<IndexMap<String, Value>, Box<dyn error::Error>> {
     let primary_columns = df
         .get_column_names_str()
         .iter()
@@ -413,6 +428,7 @@ fn create_nodes_map(df: &DataFrame, size: IdxSize) -> Result<IndexMap<String, Va
                         .into_iter()
                         .filter_map(|a| a.map(|s| s.to_string()))
                         .map(|a| a.split_once(":").unwrap().0.to_string())
+                        .sorted()
                         .dedup()
                         .collect_vec();
                     if cn_values_as_vec.is_empty() {
@@ -468,12 +484,12 @@ fn create_nodes_map(df: &DataFrame, size: IdxSize) -> Result<IndexMap<String, Va
 
     let mut map = IndexMap::new();
     map.insert("columns".to_string(), to_value(columns_map).unwrap());
-    map.insert("num_rows".to_string(), to_value(size * 2).unwrap());
+    map.insert("num_rows".to_string(), to_value(rows).unwrap());
 
     Ok(map)
 }
 
-fn create_edges_map(df: &DataFrame, size: IdxSize) -> Result<IndexMap<String, Value>, Box<dyn error::Error>> {
+fn create_edges_map(df: &DataFrame, rows: &i32) -> Result<IndexMap<String, Value>, Box<dyn error::Error>> {
     let primary_columns = df
         .get_column_names_str()
         .iter()
@@ -548,7 +564,7 @@ fn create_edges_map(df: &DataFrame, size: IdxSize) -> Result<IndexMap<String, Va
 
     let mut map = IndexMap::new();
     map.insert("columns".to_string(), to_value(columns_map).unwrap());
-    map.insert("num_rows".to_string(), to_value(size * 2).unwrap());
+    map.insert("num_rows".to_string(), to_value(rows).unwrap());
 
     Ok(map)
 }
